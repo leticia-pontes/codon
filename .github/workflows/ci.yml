@@ -10,6 +10,8 @@ jobs:
   test:
     name: Test on ${{ matrix.os }} / Python ${{ matrix['python-version'] }}
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -25,7 +27,7 @@ jobs:
         with:
           python-version: ${{ matrix['python-version'] }}
           cache: 'pip'
-          
+
       - name: Check for requirements file
         id: check_req
         shell: bash
@@ -49,9 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          # atualiza pip, mas evita checagens interativas que atrasam
           python -m pip install --upgrade pip --disable-pip-version-check || true
-          # tenta instalar requirements com 2 tentativas (retry simples)
           if [ -f "requirements.txt" ]; then
             for i in 1 2; do
               pip install --prefer-binary --no-input -r requirements.txt && break || sleep 5
@@ -64,7 +64,8 @@ jobs:
         run: |
           set -euxo pipefail
           chmod +x scripts/run_all_tests.sh || true
-          ./scripts/run_all_tests.sh || {
+          
+          bash scripts/run_all_tests.sh || {
             echo "run_all_tests.sh failed — fallback to pytest"
             pytest test -q || ( echo "pytest also failed"; false )
           }
@@ -86,7 +87,7 @@ jobs:
               .\scripts\run_all_tests.ps1
             } catch {
               Write-Host "run_all_tests.ps1 falhou. Fallback para pytest."
-              pytest codon/test -q
+              pytest test -q
               if ($LASTEXITCODE -ne 0) { throw "pytest falhou" }
             }
           } else {
