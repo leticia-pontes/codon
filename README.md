@@ -3,6 +3,7 @@
 [![CI](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml/badge.svg)](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml)
 
 > **Nome provisório:** Codon
+> 
 > **Objetivo:** linguagem educativa voltada para processamento e análise de dados biológicos (DNA/RNA/proteínas) com builtins científicos prontos e uma sintaxe simples para estudantes e pesquisadores.
 
 
