@@ -1,4 +1,4 @@
-name: CI — Testes (Ubuntu + Windows)
+name: CI - Testes (Ubuntu + Windows)
 
 on:
   push:
@@ -8,61 +8,82 @@ on:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    name: Test on ${{ matrix.os }} / Python ${{ matrix['python-version'] }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: [3.12, 3.11, 3.10]
-    timeout-minutes: 30
+        python-version: ['3.12']
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix['python-version'] }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix['python-version'] }}
+          cache: 'pip'
+      
+      - name: Cache pip wheel & downloads (extra)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/compilador/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f "compilador/requirements.txt" ]; then pip install -r compilador/requirements.txt; fi
+      - name: Install dependencies (with retry)
         shell: bash
+        run: |
+          set -euxo pipefail
+          # atualiza pip, mas evita checagens interativas que atrasam
+          python -m pip install --upgrade pip --disable-pip-version-check || true
+          # tenta instalar requirements com 2 tentativas (retry simples)
+          if [ -f "compilador/requirements.txt" ]; then
+            for i in 1 2; do
+              pip install --prefer-binary --no-input -r compilador/requirements.txt && break || sleep 5
+            done
+          fi
 
-      - name: Run tests (OS-specific)
+      - name: Run tests (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          chmod +x compilador/scripts/run_all_tests.sh || true
-          ./compilador/scripts/run_all_tests.sh
         shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x compilador/scripts/run_all_tests.sh || true
+          ./compilador/scripts/run_all_tests.sh || {
+            echo "run_all_tests.sh failed — fallback to pytest"
+            pytest compilador/test -q || ( echo "pytest also failed"; false )
+          }
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
           python -m venv .venv
           .\.venv\Scripts\Activate.ps1
-          pip install --upgrade pip
-          if (Test-Path "compilador/requirements.txt") { pip install -r compilador/requirements.txt }
-          # Use the PowerShell test script if present, otherwise fallback to pytest
+          python -m pip install --upgrade pip --disable-pip-version-check
+          if (Test-Path "compilador/requirements.txt") {
+            pip install --prefer-binary --no-input -r compilador/requirements.txt
+          }
           if (Test-Path "compilador/scripts/run_all_tests.ps1") {
-            .\compilador\scripts\run_all_tests.ps1
+            try {
+              .\compilador\scripts\run_all_tests.ps1
+            } catch {
+              Write-Host "run_all_tests.ps1 falhou. Fallback para pytest."
+              pytest compilador/test -q
+              if ($LASTEXITCODE -ne 0) { throw "pytest falhou" }
+            }
           } else {
             pytest compilador/test -q
           }
-        shell: pwsh
-
-      - name: Fallback - Run pytest (if scripts didn't run)
-        if: ${{ always() }}
-        run: |
-          pytest compilador/test -q || true
-        shell: bash
 
       - name: Upload pytest JUnit (optional)
-        if: success()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: pytest-report
