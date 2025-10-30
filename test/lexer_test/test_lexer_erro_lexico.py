@@ -1,5 +1,5 @@
 import pytest
-from lib_ou_src.lexer.lexer_completo import Lexer, LexicalError
+from src.lexer.lexer_completo import Lexer, LexicalError
 
 def test_lexer_raises_on_invalid_char():
     # caractere inválido (por exemplo, caractere unicode não esperado/ símbolo raro)
