@@ -1,5 +1,5 @@
 import pytest
-from src.lexer.lexer_completo import Lexer, TokenStream, LexicalError
+from src.analisador_lexico_completo.lexer_completo import Lexer, TokenStream, LexicalError
 
 SAMPLE = r'''
 // comentário simples
