@@ -309,16 +309,25 @@ def build_dfa(nfa: NFA, alphabet: List[int]) -> DFA:
 
     return DFA(start=0, accepts=dfa_accepts, trans=dfa_trans)
 
-def build_master_dfa():
-    builder = NFABuilder()
-    token_defs = build_token_nfas(builder)
+def merge_nfas_to_master(token_defs: List[Tuple[Tuple[int, int], str]], builder: NFABuilder) -> NFA:
+    """
+    Combina uma lista de NFAs de tokens individuais em um único NFA mestre
+    com um novo estado inicial e priorização por ordem.
+    """
     start = builder.new_state()
     accepts: Dict[int, Tuple[str, int]] = {}
+
     for prio, (pair, name) in enumerate(token_defs):
         s, a = pair
         builder.add_eps(start, s)
         accepts[a] = (name, prio)
-    nfa = NFA(states=builder.states, start=start, accepts=accepts)
+
+    return NFA(states=builder.states, start=start, accepts=accepts)
+
+def build_master_dfa():
+    builder = NFABuilder()
+    token_defs = build_token_nfas(builder)
+    nfa = merge_nfas_to_master(token_defs, builder)
     alphabet = list(range(129))
     dfa = build_dfa(nfa, alphabet)
     return dfa

@@ -1,0 +1,43 @@
+program ProteinFolding {
+    /" Define a estrutura de um domínio proteico "/
+    struct Dominio {
+        prot sequencia_aa;
+        int inicio;
+        int fim;
+    }
+
+    var Dom = Dominio {
+        sequencia_aa: prot"MEEPQSDPSVET", // Literal proteico
+        inicio: 1,
+        fim: 12
+    };
+
+    var array_dominios = new Dominio[10];
+
+    // Testa acessos e ranges
+    void processar_dominios(dominio_alvo: Dominio) {
+
+        // Acesso a membro (DOT)
+        var tamanho_total = dominio_alvo.fim - dominio_alvo.inicio;
+
+        // Atribuição com acesso a índice e membro
+        array_dominios[5].sequencia_aa = prot"ACGT";
+
+        // Uso do operador DOT3 (intervalo exclusivo) e DOT2 (inclusivo)
+        for i in 1...10 { // Range de 1 a 9 (DOT3)
+            var range_alvo = 5..15; // Range de 5 a 15 (DOT2)
+
+            if i >= range_alvo.inicio {
+                i += 1;
+            }
+        }
+
+        // Uso de assign
+        dominio_alvo.inicio += 1; // PLUS_EQ
+
+        // Retorno opcional (com expressão unária)
+        return -(tamanho_total + 1); // MINUS Unário
+    }
+
+    processar_dominios(Dom);
+}

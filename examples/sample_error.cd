@@ -7,7 +7,6 @@ func calcular_cn(amostra: string, valor_ct: float) -> string {
     }
     amostra += " Analisada"; // Operador composto
     var resultado = true;
-    
     return resultado;
 }
 

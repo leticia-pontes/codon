@@ -1,0 +1,33 @@
+program Sequenciador {
+    """
+    Este bloco de código verifica se uma sequência de DNA
+    contém um promotor e se o gene é longo o suficiente.
+    """
+
+    // Literal biológico DNA (case-insensitive)
+    const PROMOTOR = dna"Gattaca";
+    const MIN_LEN = 1500;
+
+    var sequencia = dna"GATTACANNNNNNNNNNNNN"; // Exemplo de sequência
+    var comprimento = len(sequencia); // Chamada de função embutida (simulada)
+
+    void analisar_gene(gene_id: string, seq_gene: dna) {
+        var bool tem_promotor = (seq_gene.find(PROMOTOR) != null);
+        var bool e_longo = (len(seq_gene) >= MIN_LEN);
+
+        // Uso de operadores lógicos e comparação
+        if tem_promotor && e_longo {
+            print("Gene " + gene_id + " é válido.");
+        } else if tem_promotor || (comprimento < 50) {
+            print("Gene " + gene_id + " é marginal.");
+        } else {
+            gene_id = gene_id + " (Descartado)";
+            print(gene_id);
+        }
+
+        // Teste de operador de shift
+        var bitmask = 1 << 4; // SHL
+    }
+
+    analisar_gene("HBA1", sequencia);
+}
