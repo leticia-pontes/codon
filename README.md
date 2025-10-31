@@ -143,17 +143,17 @@ function transcrever(DNA){
       RNA = RNA + "C"
     }
   }
-  return RNA;
+  return RNA
 }
 
 s = "ATCG"
-print(transcrever(s));
+print(transcrever(s))
 ```
 
 
 ## Instalação e Uso
 
-> Presume-se Python ≥ 3.10 instalado. Os exemplos usam o layout `compilador/` com código em `src/`.
+> Python ≥ 3.10 instalado. Os exemplos usam o layout `compilador/` com código em `src/`.
 
 ### Linux / macOS (bash)
 
@@ -166,7 +166,7 @@ cd codon
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 3. instalar dependências (se houver)
+# 3. instalar dependências
 pip install -r compilador/requirements.txt || true
 
 # 4. rodar um programa (sem instalar o pacote)
@@ -258,4 +258,4 @@ compilador/
 
 ## Observação
 
-Não estamos abertos a contribuições no momento.
+Não estamos abertos a contribuições no momento (somente dos membros do grupo, claro).
