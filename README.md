@@ -106,7 +106,7 @@ O interpretador implementa `eval(expr, env)` e `exec(stmt, env)`.
 
 ## Biblioteca Biológica Embutida (builtins principais)
 
-Algumas funções já disponíveis em `globals`:
+Algumas funções a serem implementadas em `globals`:
 
 * `dna_gc(seq) -> float`
 * `dna_comp(seq) -> string`
