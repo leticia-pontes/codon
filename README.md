@@ -153,7 +153,7 @@ print(transcrever(s))
 
 ## Instalação e Uso
 
-> Python ≥ 3.10 instalado. Os exemplos usam o layout `compilador/` com código em `src/`.
+> Python ≥ 3.10 instalado.
 
 ### Linux / macOS (bash)
 
@@ -167,13 +167,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # 3. instalar dependências
-pip install -r compilador/requirements.txt || true
+pip install -r requirements.txt || true
 
 # 4. rodar um programa (sem instalar o pacote)
-PYTHONPATH=./compilador python -m src.compilador run examples/basicos/hello_world.dg
+PYTHONPATH=./ python -m src.compilador run examples/basicos/hello_world.dg
 
 # 5. rodar testes
-./compilador/scripts/run_all_tests.sh
+./scripts/run_all_tests.sh
 ```
 
 ### Windows (PowerShell)
@@ -185,15 +185,15 @@ cd codon
 python -m venv .venv
 .\.venv\Scripts\activate
 
-pip install -r compilador/requirements.txt
+pip install -r requirements.txt
 
 # executar exemplo
-$env:PYTHONPATH = "$PWD\compilador;$env:PYTHONPATH"
-python -m src.compilador run examples\basicos\hello_world.dg
+$env:PYTHONPATH = "$PWD;$env:PYTHONPATH"
+python -m src run examples\basicos\hello_world.dg
 
 # rodar testes via script PS
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\compilador\scripts\run_all_tests.ps1
+.\scripts\run_all_tests.ps1
 ```
 
 ## Executar Testes (rápido)
@@ -202,10 +202,10 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 
 ```bash
 # se virtualenv ativo:
-pytest compilador/test -q
+pytest test -q
 
 # ou usar script:
-./compilador/scripts/run_all_tests.sh
+./scripts/run_all_tests.sh
 ```
 
 ### PowerShell (Windows)
@@ -213,17 +213,17 @@ pytest compilador/test -q
 ```powershell
 # ativar .venv
 .\.venv\Scripts\Activate.ps1
-pytest compilador/test -q
+pytest test -q
 
 # ou usar script:
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\compilador\scripts\run_all_tests.ps1
+.\scripts\run_all_tests.ps1
 ```
 
 ### Executar somente PyTest
 
 ```bash
-pytest compilador/test -q
+pytest test -q
 ```
 
 ## CI - GitHub Actions
