@@ -3,6 +3,7 @@
 [![CI](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml/badge.svg)](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml)
 
 > **Nome provisório:** Codon
+> 
 > **Objetivo:** linguagem educativa voltada para processamento e análise de dados biológicos (DNA/RNA/proteínas) com builtins científicos prontos e uma sintaxe simples para estudantes e pesquisadores.
 
 
@@ -105,7 +106,7 @@ O interpretador implementa `eval(expr, env)` e `exec(stmt, env)`.
 
 ## Biblioteca Biológica Embutida (builtins principais)
 
-Algumas funções já disponíveis em `globals`:
+Algumas funções a serem implementadas em `globals`:
 
 * `dna_gc(seq) -> float`
 * `dna_comp(seq) -> string`
@@ -129,7 +130,7 @@ Algumas funções já disponíveis em `globals`:
 **Transcrição simples**
 
 ```codon
-function transcrever(DNA){
+function transcrever(DNA) {
   RNA = ""
   for i = 0; i < length(DNA); i = i + 1 {
     if DNA[i] == 'A' {
@@ -142,17 +143,17 @@ function transcrever(DNA){
       RNA = RNA + "C"
     }
   }
-  return RNA;
+  return RNA
 }
 
 s = "ATCG"
-print(transcrever(s));
+print(transcrever(s))
 ```
 
 
 ## Instalação e Uso
 
-> Presume-se Python ≥ 3.10 instalado. Os exemplos usam o layout `compilador/` com código em `src/`.
+> Python ≥ 3.10 instalado.
 
 ### Linux / macOS (bash)
 
@@ -165,14 +166,14 @@ cd codon
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 3. instalar dependências (se houver)
-pip install -r compilador/requirements.txt || true
+# 3. instalar dependências
+pip install -r requirements.txt || true
 
 # 4. rodar um programa (sem instalar o pacote)
-PYTHONPATH=./compilador python -m src.compilador run examples/basicos/hello_world.dg
+PYTHONPATH=./ python -m src.compilador run examples/basicos/hello_world.dg
 
 # 5. rodar testes
-./compilador/scripts/run_all_tests.sh
+./scripts/run_all_tests.sh
 ```
 
 ### Windows (PowerShell)
@@ -184,15 +185,15 @@ cd codon
 python -m venv .venv
 .\.venv\Scripts\activate
 
-pip install -r compilador/requirements.txt
+pip install -r requirements.txt
 
 # executar exemplo
-$env:PYTHONPATH = "$PWD\compilador;$env:PYTHONPATH"
+$env:PYTHONPATH = "$PWD;$env:PYTHONPATH"
 python -m src.compilador run examples\basicos\hello_world.dg
 
 # rodar testes via script PS
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\compilador\scripts\run_all_tests.ps1
+.\scripts\run_all_tests.ps1
 ```
 
 ## Executar Testes (rápido)
@@ -201,10 +202,10 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 
 ```bash
 # se virtualenv ativo:
-pytest compilador/test -q
+pytest test -q
 
 # ou usar script:
-./compilador/scripts/run_all_tests.sh
+./scripts/run_all_tests.sh
 ```
 
 ### PowerShell (Windows)
@@ -212,17 +213,17 @@ pytest compilador/test -q
 ```powershell
 # ativar .venv
 .\.venv\Scripts\Activate.ps1
-pytest compilador/test -q
+pytest test -q
 
 # ou usar script:
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\compilador\scripts\run_all_tests.ps1
+.\scripts\run_all_tests.ps1
 ```
 
 ### Executar somente PyTest
 
 ```bash
-pytest compilador/test -q
+pytest test -q
 ```
 
 ## CI - GitHub Actions
@@ -257,4 +258,4 @@ compilador/
 
 ## Observação
 
-Não estamos abertos a contribuições no momento.
+Não estamos abertos a contribuições no momento (somente dos membros do grupo, claro).

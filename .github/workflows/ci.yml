@@ -10,6 +10,8 @@ jobs:
   test:
     name: Test on ${{ matrix.os }} / Python ${{ matrix['python-version'] }}
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -25,13 +27,12 @@ jobs:
         with:
           python-version: ${{ matrix['python-version'] }}
           cache: 'pip'
-          
+
       - name: Check for requirements file
         id: check_req
         shell: bash
         run: |
-          # Verificando se o arquivo de requisitos existe no novo caminho (codon/)
-          if [ -f "codon/requirements.txt" ]; then
+          if [ -f "requirements.txt" ]; then
             echo "requirements_exist=true" >> $GITHUB_OUTPUT
           else
             echo "requirements_exist=false" >> $GITHUB_OUTPUT
@@ -42,7 +43,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/codon/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -50,12 +51,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          # atualiza pip, mas evita checagens interativas que atrasam
           python -m pip install --upgrade pip --disable-pip-version-check || true
-          # tenta instalar requirements com 2 tentativas (retry simples)
-          if [ -f "codon/requirements.txt" ]; then
+          if [ -f "requirements.txt" ]; then
             for i in 1 2; do
-              pip install --prefer-binary --no-input -r codon/requirements.txt && break || sleep 5
+              pip install --prefer-binary --no-input -r requirements.txt && break || sleep 5
             done
           fi
 
@@ -64,10 +63,11 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          chmod +x codon/scripts/run_all_tests.sh || true
-          ./codon/scripts/run_all_tests.sh || {
+          chmod +x scripts/run_all_tests.sh || true
+          
+          bash scripts/run_all_tests.sh || {
             echo "run_all_tests.sh failed — fallback to pytest"
-            pytest codon/test -q || ( echo "pytest also failed"; false )
+            pytest test -q || ( echo "pytest also failed"; false )
           }
 
       - name: Run tests (Windows)
@@ -79,19 +79,19 @@ jobs:
           python -m venv .venv
           .\.venv\Scripts\Activate.ps1
           python -m pip install --upgrade pip --disable-pip-version-check
-          if (Test-Path "codon/requirements.txt") {
-            pip install --prefer-binary --no-input -r codon/requirements.txt
+          if (Test-Path "requirements.txt") {
+            pip install --prefer-binary --no-input -r requirements.txt
           }
-          if (Test-Path "codon/scripts/run_all_tests.ps1") {
+          if (Test-Path "scripts/run_all_tests.ps1") {
             try {
-              .\codon\scripts\run_all_tests.ps1
+              .\scripts\run_all_tests.ps1
             } catch {
               Write-Host "run_all_tests.ps1 falhou. Fallback para pytest."
-              pytest codon/test -q
+              pytest test -q
               if ($LASTEXITCODE -ne 0) { throw "pytest falhou" }
             }
           } else {
-            pytest codon/test -q
+            pytest test -q
           }
 
       - name: Upload pytest JUnit (optional)
