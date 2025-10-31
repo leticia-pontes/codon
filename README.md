@@ -130,7 +130,7 @@ Algumas funções a serem implementadas em `globals`:
 **Transcrição simples**
 
 ```codon
-function transcrever(DNA){
+function transcrever(DNA) {
   RNA = ""
   for i = 0; i < length(DNA); i = i + 1 {
     if DNA[i] == 'A' {
@@ -189,7 +189,7 @@ pip install -r requirements.txt
 
 # executar exemplo
 $env:PYTHONPATH = "$PWD;$env:PYTHONPATH"
-python -m src run examples\basicos\hello_world.dg
+python -m src.compilador run examples\basicos\hello_world.dg
 
 # rodar testes via script PS
 Set-ExecutionPolicy -Scope Process Bypass -Force
