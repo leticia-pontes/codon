@@ -67,7 +67,7 @@ jobs:
           
           bash scripts/run_all_tests.sh || {
             echo "run_all_tests.sh failed — fallback to pytest"
-            pytest test -q || ( echo "pytest also failed"; false )
+            pytest test -q --junitxml=report.xml || ( echo "pytest also failed"; false )
           }
 
       - name: Run tests (Windows)
@@ -87,11 +87,11 @@ jobs:
               .\scripts\run_all_tests.ps1
             } catch {
               Write-Host "run_all_tests.ps1 falhou. Fallback para pytest."
-              pytest test -q
+              pytest test -q --junitxml=report.xml
               if ($LASTEXITCODE -ne 0) { throw "pytest falhou" }
             }
           } else {
-            pytest test -q
+            pytest test -q --junitxml=report.xml
           }
 
       - name: Upload pytest JUnit (optional)
