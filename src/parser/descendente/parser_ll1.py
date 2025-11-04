@@ -1,8 +1,8 @@
 from typing import List, Any, Optional
 from ...lexer.tokens import TokenStream, Token, KEYWORDS
-from ...ast.ast_base import Program, Declaration, Statement, Expression
-from ...ast.declaracoes import VarDecl, PrintStmt, IfStmt, WhileStmt, Block, FunctionDecl, Parameter, ExprStmt, ReturnStmt
-from ...ast.expressoes import Assignment, Binary, Unary, Literal, Identifier, Call, Grouping, IndexAccess, MemberAccess, Designator
+from ..ast.ast_base import Program, Declaration, Statement, Expression
+from ..ast.declaracoes import VarDecl, PrintStmt, IfStmt, WhileStmt, Block, FunctionDecl, Parameter, ExprStmt, ReturnStmt
+from ..ast.expressoes import Assignment, Binary, Unary, Literal, Identifier, Call, Grouping, IndexAccess, MemberAccess, Designator
 from ...utils.erros import SyntaxError, ErrorHandler
 
 class ParserLL1:
