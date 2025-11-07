@@ -20,19 +20,19 @@ class ExampleProgramsTest(unittest.TestCase):
         success = []
         failed = []
 
-        print(f"📂 Procurando exemplos em: {os.path.abspath(EXAMPLES_DIR)}", flush=True)
+        print(f"[INFO]  Procurando exemplos em: {os.path.abspath(EXAMPLES_DIR)}", flush=True)
 
         if not os.path.exists(EXAMPLES_DIR):
-            self.fail(f"❌ Diretório {EXAMPLES_DIR} não encontrado!")
+            self.fail(f"[INFO] Diretório {EXAMPLES_DIR} não encontrado!")
 
         for root, _, files in os.walk(EXAMPLES_DIR):
-            print(f"\n📁 Entrando em: {root}", flush=True)
+            print(f"\n[INFO] Entrando em: {root}", flush=True)
             for fname in sorted(files):
                 if not fname.endswith(".cd"):
                     continue
                 path = os.path.join(root, fname)
                 print(f"\n   - {fname}", flush=True)
-                print(f"\t🔍 Testando {path} ...", flush=True)
+                print(f"\t[INFO] Testando {path} ...", flush=True)
 
                 try:
                     with open(path, "r", encoding="utf-8") as f:
@@ -61,33 +61,33 @@ class ExampleProgramsTest(unittest.TestCase):
 
                 except Exception as e:
                     # Aqui só imprimimos tokens quando houve erro
-                    print("\t🟡 Tokens antes do erro:")
+                    print("\t[INFO] Tokens antes do erro:")
                     for t in tokens:
                         print(f"\t   {t.linha:>3}:{t.coluna:<3}  {t.tipo:<12}  {t.valor!r}")
 
                     # Checar se o erro era esperado (você pode definir uma lista de erros esperados por arquivo)
                     erro_esperado = EXPECTED_ERRORS.get(fname)  # dict: {nome_arquivo: tipo_erro_esperado}
                     if erro_esperado and isinstance(e, erro_esperado):
-                        print(f"\t🟢 ERRO esperado: {type(e).__name__} ✅")
+                        print(f"\t[INFO] ERRO esperado: {type(e).__name__}")
                         success.append(path)
                     else:
-                        print(f"\t🔴 ERRO inesperado: {str(e)}")
+                        print(f"\t[INFO] ERRO inesperado: {str(e)}")
                         failed.append((path, str(e)))
 
-        # ✅ Resumo final
+        # Resumo final
         print("\n" + "=" * 60)
-        print("🧬 RESULTADO FINAL DOS TESTES DE EXEMPLOS")
+        print("[INFO] RESULTADO FINAL DOS TESTES DE EXEMPLOS")
         print("=" * 60)
-        print(f"✅ Exemplos analisados com sucesso: {len(success)}")
-        print(f"❌ Exemplos com erro de sintaxe: {len(failed)}\n")
+        print(f"[INFO] Exemplos analisados com sucesso: {len(success)}")
+        print(f"[INFO] Exemplos com erro de sintaxe: {len(failed)}\n")
 
         if success:
-            print("🟢 SUCESSOS:")
+            print("[INFO] SUCESSOS:")
             for path in success:
                 print(f"   - {os.path.relpath(path, EXAMPLES_DIR)}")
 
         if failed:
-            print("\n🔴 FALHAS:")
+            print("\n[INFO] FALHAS:")
             for path, err in failed:
                 print(f"   - {os.path.relpath(path, EXAMPLES_DIR)}")
                 print(f"     ↳ Erro: {err}")
