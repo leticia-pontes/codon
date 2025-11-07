@@ -11,6 +11,7 @@ except ImportError:
     print("Erro de Importação do Lexer. Certifique-se de que o path de importação está correto.")
     sys.exit(1)
 
+
 # ==========================================
 # 1. Definição dos Nós da AST
 # ==========================================
@@ -84,7 +85,7 @@ class Variavel(ASTNode):
 
 @dataclass
 class ChamadaFuncao(ASTNode):
-    nome: str
+    nome: Union[str, ASTNode]
     argumentos: List[ASTNode]
 
 @dataclass
@@ -115,8 +116,9 @@ class CriacaoClasse(ASTNode):
     classe: str
     argumentos: List[ASTNode]
 
+
 # ==========================================
-# 2. Classe Parser
+# 2. Parser
 # ==========================================
 class Parser:
     def __init__(self, ts: TokenStream, error_handler=None):
@@ -126,16 +128,17 @@ class Parser:
     def parse(self) -> Programa:
         declaracoes = []
         while self.ts.peek():
+            t = self.ts.peek()
+            print(f"[DEBUG parse] peek={t.tipo if t else None}, valor={t.valor if t else None}")
             try:
                 declaracoes.append(self._declaracao())
             except (LexicalError, SyntaxError) as e:
                 self.error_handler.report_error(e)
-                # Consume token problemático para não travar
                 self.ts.next()
+        print(f"[DEBUG parse] Total de declarações: {len(declaracoes)}")
         return Programa(declaracoes)
 
     def _skip_to_sync(self):
-        # Função para tentar sincronizar após um erro e continuar parsing
         while True:
             t = self.ts.peek()
             if t is None or t.tipo in ("SEMI", "RBRACE"):
@@ -143,18 +146,26 @@ class Parser:
                 break
             self.ts.next()
 
+    # ==========================================
+    # --- Declarações e Instruções ---
+    # ==========================================
     def _declaracao(self) -> ASTNode:
         t = self.ts.peek()
+        if t:
+            print(f"[DEBUG _declaracao] peek tipo={t.tipo}, valor={t.valor}")
         if t and t.tipo == 'KWD':
             if t.valor == 'function':
+                print("[DEBUG _declaracao] chamando _decl_funcao")
                 return self._decl_funcao(is_procedure=False)
             elif t.valor == 'procedure':
+                print("[DEBUG _declaracao] chamando _decl_funcao como procedure")
                 return self._decl_funcao(is_procedure=True)
             elif t.valor == 'class':
+                print("[DEBUG _declaracao] chamando _decl_classe")
                 return self._decl_classe()
+        print("[DEBUG _declaracao] tratando como instrucao")
         return self._instrucao()
 
-    # --- Declarações ---
     def _decl_funcao(self, is_procedure: bool) -> DeclaracaoFuncao:
         self.ts.expect("KWD")
         nome_token = self.ts.expect("ID")
@@ -221,7 +232,9 @@ class Parser:
             instrucoes.append(self._instrucao())
         return instrucoes
 
+    # ==========================================
     # --- Instruções ---
+    # ==========================================
     def _instrucao(self) -> ASTNode:
         t = self.ts.peek()
         if t and t.tipo == 'KWD':
@@ -246,13 +259,26 @@ class Parser:
 
     def _instrucao_atribuicao_ou_chamada(self) -> ASTNode:
         alvo = self._exp_primaria_ou_acesso()
-        atrib_op = self.ts.match("ASSIGN","PLUS_EQ","MINUS_EQ")
+        print(f"[DEBUG _instrucao_atribuicao_ou_chamada] alvo={alvo}, peek={self.ts.peek()}")
+
+        t = self.ts.peek()
+        print(f"[DEBUG atribuição ou chamada] peek={t.tipo if t else None}, valor={t.valor if t else None}")
+        atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ","MINUS_EQ")
+        print(f"[DEBUG atribuição ou chamada] atrib_op={atrib_op}")
+
         if atrib_op:
             valor = self._expressao()
             self.ts.expect("SEMI")
+            print(f"[DEBUG _instrucao_atribuicao_ou_chamada] Atribuição: {alvo} {atrib_op.valor} {valor}")
             return InstrucaoAtribuicao(alvo, atrib_op.valor, valor)
-        self.ts.expect("SEMI")
-        return alvo
+        elif isinstance(alvo, (ChamadaFuncao, CriacaoClasse)):
+            self.ts.expect("SEMI")
+            print(f"[DEBUG _instrucao_atribuicao_ou_chamada] Chamada de função ou criação de classe: {alvo}")
+            return alvo
+        else:
+            self.ts.expect("SEMI")
+            print(f"[DEBUG _instrucao_atribuicao_ou_chamada] Expressão simples retornada: {alvo}")
+            return alvo
 
     def _instrucao_if(self) -> InstrucaoIf:
         self.ts.expect("KWD")
@@ -309,7 +335,7 @@ class Parser:
     def _instrucao_print(self) -> InstrucaoImpressao:
         self.ts.expect("KWD")
         self.ts.expect("LPAREN")
-        expr = self._expressao()
+        expr = self._exp_primaria_ou_acesso()
         self.ts.expect("RPAREN")
         self.ts.expect("SEMI")
         return InstrucaoImpressao(expr)
@@ -318,43 +344,51 @@ class Parser:
     # --- Expressões ---
     # ==========================================
     def _exp_primaria_ou_acesso(self) -> ASTNode:
-        t = self.ts.peek()
-
-        # 1️⃣ Criação de array: new Tipo[expr]
-        if t.tipo == "ID" and t.valor == "new":
-            self.ts.next()  # consome 'new'
-            tipo_token = self.ts.expect("KWD") or self.ts.expect("ID")
-            self.ts.expect("LBRACK")
-            tamanho_expr = self._expressao()
-            self.ts.expect("RBRACK")
-            return CriacaoArray(tipo_token.valor, tamanho_expr)
-
-        # 2️⃣ Variável, literal ou parêntese
         node = self._exp_primaria()
+        print(f"[DEBUG _exp_primaria_ou_acesso] ponto inicial: {node}, peek={self.ts.peek()}")
 
-        # 3️⃣ Chamada de função ou construtor de classe, acesso a campos ou arrays
         while True:
-            if self.ts.peek() and self.ts.peek().tipo == 'LPAREN':
+            peek = self.ts.peek()
+            if not peek:
+                print("[DEBUG _exp_primaria_ou_acesso] EOF atingido")
+                break
+
+            print(f"[DEBUG _exp_primaria_ou_acesso] peek={peek.tipo} '{peek.valor}'")
+
+            # Chamada de função: somente se node for uma variável
+            if peek.tipo == 'LPAREN' and isinstance(node, Variavel):
                 self.ts.next()
+                print("[DEBUG _exp_primaria_ou_acesso] LPAREN consumido para chamada de função")
                 argumentos = []
                 while self.ts.peek() and self.ts.peek().tipo != 'RPAREN':
-                    argumentos.append(self._expressao())
-                    self.ts.match("COMMA")
+                    arg = self._expressao()
+                    print(f"[DEBUG _exp_primaria_ou_acesso] argumento adicionado: {arg}")
+                    argumentos.append(arg)
+                    if self.ts.peek() and self.ts.peek().tipo == "COMMA":
+                        self.ts.next()  # consome a vírgula
+                        print("[DEBUG _exp_primaria_ou_acesso] COMMA consumido entre argumentos")
                 self.ts.expect("RPAREN")
-                if isinstance(node, Variavel):
-                    # Construtor de classe ou função
-                    node = CriacaoClasse(node.nome, argumentos)
-                else:
-                    node = ChamadaFuncao(node, argumentos)
+                print("[DEBUG _exp_primaria_ou_acesso] RPAREN consumido para chamada de função")
+                node = ChamadaFuncao(node, argumentos)
+
+            # Acesso a campo (objeto.campo)
             elif self.ts.match("DOT"):
                 campo_token = self.ts.expect("ID")
+                print(f"[DEBUG _exp_primaria_ou_acesso] acesso a campo: {campo_token.valor}")
                 node = AcessoCampo(node, campo_token.valor)
+
+            # Acesso a índice (array[indice])
             elif self.ts.match("LBRACK"):
                 indice = self._expressao()
                 self.ts.expect("RBRACK")
+                print(f"[DEBUG _exp_primaria_ou_acesso] acesso a índice: {indice}")
                 node = AcessoArray(node, indice)
+
             else:
+                print("[DEBUG _exp_primaria_ou_acesso] nada mais a processar")
                 break
+
+        print(f"[DEBUG _exp_primaria_ou_acesso] ponto final: {node}")
         return node
 
     def _exp_primaria(self):
@@ -362,9 +396,13 @@ class Parser:
         if not t:
             self.error_handler.report_error(SyntaxError("Esperado expressão, mas EOF", -1, -1))
             return Literal(None)
+
+        print(f"[DEBUG _exp_primaria] peek={t.tipo} '{t.valor}'")
+
         try:
             if t.tipo in ("DEC_INT","FLOAT","STRING","CHAR_LIT","DNA_LIT","RNA_LIT","PROT_LIT"):
                 self.ts.next()
+                print(f"[DEBUG _exp_primaria] literal consumido: {t.valor}")
                 if t.tipo=="DEC_INT": return Literal(int(t.valor))
                 if t.tipo=="FLOAT": return Literal(float(t.valor))
                 if t.tipo=="CHAR_LIT": return Literal(t.valor[1:-1])
@@ -372,19 +410,28 @@ class Parser:
                 if t.tipo in ("DNA_LIT","RNA_LIT","PROT_LIT"):
                     valor = t.valor.split('"',1)[1].rsplit('"',1)[0]
                     return Literal(valor)
+
             elif t.tipo=="LPAREN":
                 self.ts.next()
-                expr=self._expressao()
+                print("[DEBUG _exp_primaria] LPAREN consumido para expressão agrupada")
+                expr = self._expressao()
                 self.ts.expect("RPAREN")
+                print("[DEBUG _exp_primaria] RPAREN consumido para expressão agrupada")
                 return expr
+
             elif t.tipo=="ID":
-                id_token=self.ts.next()
+                id_token = self.ts.next()
+                print(f"[DEBUG _exp_primaria] ID consumido: {id_token.valor}")
                 return Variavel(id_token.valor)
+
             elif t.tipo=="KWD" and t.valor in ("true","false","null"):
                 self.ts.next()
+                print(f"[DEBUG _exp_primaria] literal keyword consumido: {t.valor}")
                 return Literal(t.valor)
+
             else:
                 raise SyntaxError(f"Esperado expressão primária, mas chegou {t.valor}", t.linha, t.coluna)
+
         except SyntaxError as e:
             self.error_handler.report_error(e)
             self._skip_to_sync()
@@ -447,4 +494,4 @@ class Parser:
         if op:
             direita = self._exp_unaria()
             return ExpressaoUnaria(op.valor,direita)
-        return self._exp_primaria()
+        return self._exp_primaria_ou_acesso()
