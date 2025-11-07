@@ -26,44 +26,19 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix['python-version'] }}
-          cache: 'pip'
+          check-latest: false
+          update-environment: true
 
-      - name: Check for requirements file
-        id: check_req
+      - name: Install dependencies (upgrade pip)
         shell: bash
         run: |
-          if [ -f "requirements.txt" ]; then
-            echo "requirements_exist=true" >> $GITHUB_OUTPUT
-          else
-            echo "requirements_exist=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Cache pip wheel & downloads (extra)
-        if: steps.check_req.outputs.requirements_exist == 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies (with retry)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          python -m pip install --upgrade pip --disable-pip-version-check || true
-          if [ -f "requirements.txt" ]; then
-            for i in 1 2; do
-              pip install --prefer-binary --no-input -r requirements.txt && break || sleep 5
-            done
-          fi
+          python -m pip install --upgrade pip --disable-pip-version-check
 
       - name: Run tests (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          chmod +x scripts/run_all_tests.sh || true
-          bash scripts/run_all_tests.sh || { echo "run_all_tests.sh falhou"; exit 1; }
+          python -m unittest discover -s test -p "*.py" -v
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
@@ -74,18 +49,15 @@ jobs:
           python -m venv .venv
           .\.venv\Scripts\Activate.ps1
           python -m pip install --upgrade pip --disable-pip-version-check
-          if (Test-Path "requirements.txt") {
-            pip install -r requirements.txt
-          }
           if (Test-Path "scripts/run_all_tests.ps1") {
             .\scripts\run_all_tests.ps1
           } else {
             python -m unittest discover -s test -p "*.py" -v
           }
 
-      - name: Upload pytest JUnit (optional)
+      - name: Upload unittest JUnit report (optional)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-report
+          name: unittest-report
           path: report.xml
