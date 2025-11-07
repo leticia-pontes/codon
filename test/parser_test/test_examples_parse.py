@@ -3,7 +3,7 @@ import os
 from src.lexer.analisador_lexico_completo import Lexer, TokenStream
 from src.parser.ast.ast_base import Parser, Programa
 
-EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), '..', 'examples')
+EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'examples')
 
 class ExampleProgramsTest(unittest.TestCase):
     """

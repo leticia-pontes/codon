@@ -1,0 +1,5 @@
+// hello_world.cd
+// Programa simples que imprime "Hello, Codon!" na tela
+
+let mensagem = "Hello, Codon!"
+print(mensagem)
