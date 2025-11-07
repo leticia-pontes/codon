@@ -3,6 +3,7 @@
 [![CI](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml/badge.svg)](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml)
 
 > **Nome provisório:** Codon
+> 
 > **Objetivo:** Linguagem educativa para processamento e análise de dados biológicos (DNA, RNA, proteínas), com builtins científicos prontos e sintaxe simples para estudantes e pesquisadores.
 
 ---
@@ -10,14 +11,13 @@
 ## Sumário
 
 * [Visão Geral](#visão-geral)
-* [Fluxo do Compilador](#fluxo-do-compilador)
+	* [Fluxo do Compilador](#fluxo-do-compilador)
 * [Léxico / Tokens](#léxico--tokens)
 * [Sintaxe / Gramática (essencial)](#sintaxe--gramática-essencial)
 * [Ambiente / Env e Interpreter](#ambiente--env-e-interpreter)
 * [Biblioteca Biológica Embutida](#biblioteca-biológica-embutida)
 * [Exemplos](#exemplos)
 * [Instalação e Uso](#instalação-e-uso)
-
   * [Linux / macOS (bash)](#linux--macos-bash)
   * [Windows (PowerShell)](#windows-powershell)
 * [Executar Testes (localmente)](#executar-testes-localmente)
