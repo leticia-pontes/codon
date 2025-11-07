@@ -38,11 +38,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          chmod +x scripts/run_all_tests.sh || true
-          bash scripts/run_all_tests.sh || {
-            echo "run_all_tests.sh falhou — fallback para unittest"
-            python -m unittest discover -s test -p "*.py" -v
-          }
+          python -m unittest discover -s test -p "*.py" -v
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
