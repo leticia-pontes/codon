@@ -1,0 +1,15 @@
+/" Análise de PCR em tempo real "/
+function calcular_cn(amostra: string, valor_ct: float): string {
+    if (valor_ct <= 20.0) {
+        return "Alta_Concentracao";
+    } else if (valor_ct > 35.0) {
+        return "Nao_Detectado";
+    }
+    amostra += " Analisada"; // Operador composto
+    var resultado = true;
+    return resultado;
+}
+
+var x = 1.0e-3; // Notação científica
+x += 0.001;
+á // ERRO LÉXICO: Caractere não reconhecido 'á' na Linha 15, Coluna 1

@@ -11,14 +11,14 @@ PALAVRAS_CHAVE = {
     "and": "KWD", "or": "KWD", "not": "KWD",
     "if": "KWD", "else": "KWD", "for": "KWD",
     "while": "KWD", "return": "KWD", "break": "KWD",
-    "continue": "KWD", "func": "KWD", "var": "KWD",
+    "continue": "KWD", "function": "KWD", "var": "KWD",
     "const": "KWD", "import": "KWD", "from": "KWD",
     "as": "KWD", "struct": "KWD", "enum": "KWD",
     "match": "KWD", "case": "KWD", "default": "KWD",
     "true": "KWD", "false": "KWD", "null": "KWD",
     "pub": "KWD", "extern": "KWD", "use": "KWD",
-    "int": "KWD", "float": "KWD", "bool": "KWD", 
-    "string": "KWD", "dna": "KWD", "rna": "KWD", 
+    "int": "KWD", "float": "KWD", "bool": "KWD",
+    "string": "KWD", "dna": "KWD", "rna": "KWD",
     "prot": "KWD", "void": "KWD"
 }
 
@@ -34,9 +34,9 @@ REGRAS = [
     (r'\n', None),               # NEWLINE (Apenas para rastrear linha/coluna)
 
     # 2. TOKENS COMPOSTOS E OPERADORES LONGO
-    (r'\.\.\.', 'DOT3'), 
-    (r'\.\.', 'DOT2'), 
-    (r'->', 'ARROW'), 
+    (r'\.\.\.', 'DOT3'),
+    (r'\.\.', 'DOT2'),
+    (r'->', 'ARROW'),
     (r'==', 'EQ'),
     (r'!=', 'NE'),
     (r'<=', 'LE'),
@@ -50,8 +50,8 @@ REGRAS = [
     (r'\|\|', 'OR_OR'),
 
     # 3. LITERAIS DE TEXTO (Strings e Literais Biológicos)
-    (r'dna"[^"]*"', 'DNA_LIT'),  
-    (r'rna"[^"]*"', 'RNA_LIT'),  
+    (r'dna"[^"]*"', 'DNA_LIT'),
+    (r'rna"[^"]*"', 'RNA_LIT'),
     (r'prot"[^"]*"', 'PROT_LIT'),
     (r'"(\\"|[^"])*"', 'STRING'),
 

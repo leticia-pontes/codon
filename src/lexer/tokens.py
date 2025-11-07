@@ -4,10 +4,10 @@ from typing import Any, List
 # Lista de Palavras-Chave (KWD)
 KEYWORDS = {
     "and", "or", "not", "if", "else", "for", "while", "return",
-    "break", "continue", "func", "var", "const", "import", "from", "as",
+    "break", "continue", "function", "var", "const", "import", "from", "as",
     "struct", "enum", "match", "case", "default", "true", "false", "null",
     "pub", "extern", "use",
-    "program", "void", "read", "print", "new"
+    "void", "read", "print", "new"
 }
 
 TOKEN_KINDS = {

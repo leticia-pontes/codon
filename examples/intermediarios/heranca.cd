@@ -1,0 +1,21 @@
+/" Exemplo de herança: DNA e RNA compartilham propriedades "/
+
+class Sequencia {
+    comprimento: int;
+}
+
+class DNA extends Sequencia {
+    bases: string;
+}
+
+class RNA extends Sequencia {
+    bases: string;
+}
+
+function main(): void {
+    dna_seq = DNA();
+    dna_seq.bases = "ATCGTACG";
+    dna_seq.comprimento = length(dna_seq.bases);
+
+    print("DNA:", dna_seq.bases, "tamanho:", dna_seq.comprimento);
+}

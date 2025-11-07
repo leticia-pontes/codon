@@ -1,39 +1,24 @@
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, Deque, Iterator
+from typing import Optional, List, Tuple, Deque, Union
 from collections import deque
 import re
+import sys
 
 # ---------------
-# Token dataclass
+# Constantes (Regras e Palavras-chave)
 # ---------------
-@dataclass
-class Token:
-    tipo: str
-    valor: str
-    linha: int
-    coluna: int
-    start_pos: int
-    end_pos: int
 
-    def __repr__(self):
-        return f"Token({self.tipo!r}, {self.valor!r}, Ln{self.linha}, Col{self.coluna})"
-
-# ------
-# Regras
-# ------
 REGRAS = [
-    # Comentários / espaços (None = token ignorado)
-    (r'"""([\s\S]*?)"""', None),        # BLOCK_COMMENT (não-guloso)
-    (r'/"[^\n]*', None),                # LINE_COMMENT que começa com /"
-    (r'//[^\n]*', None),                # LINE_COMMENT // até o fim da linha
-    (r'[\t\f\r ]+', None),              # WS
-    (r'\n', None),                      # NEWLINE (será usado apenas para manutenção de linha/col)
+    (r'/"[\s\S]*?"/', None),
+    (r'//[^\n]*', None),
+    (r'[\t\f\r ]+', None),
+    (r'\n', None),
 
-    # Operadores compostos e tokens que exigem priorização (mais longos primeiro por regra)
+    (r'<-', 'ARROW_LEFT'),
+    (r'->', 'ARROW_RIGHT'),
     (r'\.\.\.', 'DOT3'),
     (r'\.\.', 'DOT2'),
     (r'=>', 'FATARROW'),
-    (r'->', 'ARROW'),
     (r'<<=', 'SHL_EQ'),
     (r'>>=', 'SHR_EQ'),
     (r'<<', 'SHL'),
@@ -50,21 +35,20 @@ REGRAS = [
     (r'&&', 'AND_AND'),
     (r'\|\|', 'OR_OR'),
 
-    # Literais biológicos / strings
     (r'dna"(\\"|[^"])*"', 'DNA_LIT'),
     (r'rna"(\\"|[^"])*"', 'RNA_LIT'),
     (r'prot"(\\"|[^"])*"', 'PROT_LIT'),
-    (r'"(\\.|[^"\n])*"', 'STRING'),  # aceita escapes e evita incluir nova linha
+    (r'"(\\.|[^"\n])*"', 'STRING'),
 
-    # Numeros
-    (r'\d+(\.\d+)?([eE][+-]?\d+)', 'FLOAT_EXP'),
+    (r"'(\\.|[^'\\n])'", "CHAR_LIT"),
+
+    (r'\d+\.\d+[eE][+-]?\d+', 'FLOAT_EXP'),
+    (r'\d+[eE][+-]?\d+', 'FLOAT_EXP'),
     (r'\d+\.\d+', 'FLOAT'),
     (r'\d+', 'DEC_INT'),
 
-    # Identificadores e keywords (keywords serão resolvidas depois)
     (r'[A-Za-z_][A-Za-z0-9_]*', 'ID'),
 
-    # Operadores simples e delimitadores
     (r'=', 'ASSIGN'),
     (r'\+', 'PLUS'),
     (r'-', 'MINUS'),
@@ -90,141 +74,36 @@ REGRAS = [
     (r'\.', 'DOT'),
 ]
 
-# Palavras-chave
 PALAVRAS_CHAVE = {
     "and": "KWD", "or": "KWD", "not": "KWD",
-    "if": "KWD", "else": "KWD", "for": "KWD",
-    "while": "KWD", "return": "KWD", "break": "KWD",
-    "continue": "KWD", "func": "KWD", "var": "KWD",
-    "const": "KWD", "import": "KWD", "from": "KWD",
-    "as": "KWD", "struct": "KWD", "enum": "KWD",
-    "match": "KWD", "case": "KWD", "default": "KWD",
-    "true": "KWD", "false": "KWD", "null": "KWD",
-    "pub": "KWD", "extern": "KWD", "use": "KWD",
-    "int": "KWD", "float": "KWD", "bool": "KWD",
-    "string": "KWD", "dna": "KWD", "rna": "KWD",
-    "prot": "KWD", "void": "KWD"
+    "if": "KWD", "elif": "KWD", "else": "KWD", "while": "KWD", "for": "KWD",
+    "switch": "KWD", "case": "KWD", "return": "KWD", "break": "KWD",
+    "continue": "KWD", "function": "KWD", "procedure": "KWD", "var": "KWD",
+    "const": "KWD", "import": "KWD", "from": "KWD", "as": "KWD", "struct": "KWD",
+    "enum": "KWD", "match": "KWD", "default": "KWD", "true": "KWD", "false": "KWD",
+    "null": "KWD", "pub": "KWD", "extern": "KWD", "use": "KWD", "class": "KWD",
+    "int": "KWD", "decimal": "KWD", "bool": "KWD", "string": "KWD", "list": "KWD",
+    "vector": "KWD", "Nbase": "KWD", "void": "KWD", "print": "KWD", "Dbase": "KWD", "Rbase": "KWD",
+    "new": "KWD"
 }
 
-# Compilação das regexes (mantendo a ordem para desempate)
 _compiled_rules = [(re.compile(r), t) for r, t in REGRAS]
 
+@dataclass
+class Token:
+    tipo: str
+    valor: str
+    linha: int
+    coluna: int
+    start_pos: int
+    end_pos: int
 
-# -----------------------------------------
-# Lexer com match mais longo + bufferização
-# -----------------------------------------
-class Lexer:
-    def __init__(self, source: str):
-        self.source = source
-        self.length = len(source)
-        self.pos = 0
-        self.linha = 1
-        self.coluna = 1
-        self._buf: Deque[Token] = deque()  # buffer para lookahead / pushback
+    def __repr__(self):
+        return f"Token({self.tipo!r}, {self.valor!r}, Ln{self.linha}, Col{self.coluna})"
 
-    def _update_line_col(self, text: str):
-        """Atualiza linha/coluna ao consumir texto."""
-        lines = text.splitlines(keepends=True)
-        if not lines:
-            return
-        if len(lines) == 1:
-            self.coluna += len(text)
-        else:
-            # há quebras de linha
-            for ch in text:
-                if ch == '\n':
-                    self.linha += 1
-                    self.coluna = 1
-                else:
-                    self.coluna += 1
+    def __hash__(self):
+        return hash((self.tipo, self.valor, self.linha, self.coluna))
 
-    def _longest_match_at(self, pos: int) -> Optional[Tuple[re.Match, str, int]]:
-        """
-        Tenta todas as regras no ponto `pos` e retorna:
-           (match_obj, token_tipo, regra_index)
-        que corresponde ao comprimento máximo. Em empate, menor regra_index (mais cedo na lista) vence.
-        """
-        best = None  # (match, tipo, idx)
-        for idx, (regex, t_tipo) in enumerate(_compiled_rules):
-            m = regex.match(self.source, pos)
-            if not m:
-                continue
-            length = m.end() - m.start()
-            if length == 0:
-                continue
-            if best is None:
-                best = (m, t_tipo, idx)
-            else:
-                cur_len = best[0].end() - best[0].start()
-                if length > cur_len:
-                    best = (m, t_tipo, idx)
-                elif length == cur_len:
-                    # desempate: ordem da regra (menor idx) mantém prioridade
-                    if idx < best[2]:
-                        best = (m, t_tipo, idx)
-        return best
-
-    def _next_token_internal(self) -> Optional[Token]:
-        if self.pos >= self.length:
-            return None
-        res = self._longest_match_at(self.pos)
-        if res is None:
-            # Erro léxico: caractere não reconhecido
-            bad_char = self.source[self.pos]
-            raise LexicalError(f"Caractere não reconhecido '{bad_char}'", self.linha, self.coluna)
-        m, token_tipo, rule_idx = res
-        valor = m.group(0)
-        start_pos = m.start()
-        end_pos = m.end()
-        token_line = self.linha
-        token_col = self.coluna
-
-        # Avança posição e atualiza linha/coluna
-        self.pos = end_pos
-        self._update_line_col(valor)
-
-        # Token ignorado (comentários e espaços)
-        if token_tipo is None:
-            return self._next_token_internal()
-
-        if token_tipo == 'ID' and valor in PALAVRAS_CHAVE:
-            token_tipo = PALAVRAS_CHAVE[valor]
-
-        return Token(token_tipo, valor, token_line, token_col, start_pos, end_pos)
-
-    # API pública
-
-    def next(self) -> Optional[Token]:
-        """Retorna o próximo token (consumido)."""
-        if self._buf:
-            return self._buf.popleft()
-        t = self._next_token_internal()
-        return t
-
-    def peek(self, n: int = 1) -> List[Optional[Token]]:
-        """Retorna até n tokens olhando à frente, sem consumir."""
-        # Preenche buffer até ter n tokens
-        while len(self._buf) < n:
-            t = self._next_token_internal()
-            if t is None:
-                break
-            self._buf.append(t)
-        # Retorna cópias (não necessárias se imutável); OK retornar referências
-        return [self._buf[i] if i < len(self._buf) else None for i in range(n)]
-
-    def push_back(self, token: Token):
-        """Coloca um token de volta no início do stream (pushback)."""
-        self._buf.appendleft(token)
-
-    def tokenize_all(self) -> List[Token]:
-        """Consume and return all tokens (útil para testes)."""
-        toks = []
-        while True:
-            t = self.next()
-            if t is None:
-                break
-            toks.append(t)
-        return toks
 
 class LexicalError(Exception):
     def __init__(self, msg: str, linha: int, coluna: int):
@@ -232,9 +111,85 @@ class LexicalError(Exception):
         self.linha = linha
         self.coluna = coluna
 
-# ----------------------------------------------
-# Helper para parser: TokenStream / ParserHelper
-# ----------------------------------------------
+
+class Lexer:
+    def __init__(self, source: str):
+        self.source = source
+        self.length = len(source)
+        self.pos = 0
+        self.linha = 1
+        self.coluna = 1
+        self._buf: Deque[Token] = deque()
+
+    def _update_line_col(self, text: str):
+        last_newline = text.rfind('\n')
+        if last_newline != -1:
+            self.linha += text.count('\n')
+            self.coluna = (len(text) - last_newline - 1) + 1
+        else:
+            self.coluna += len(text)
+
+    def _longest_match_at(self, pos: int) -> Optional[Tuple[re.Match, str, int]]:
+        best = None
+        for idx, (regex, t_tipo) in enumerate(_compiled_rules):
+            m = regex.match(self.source, pos)
+            if not m: continue
+            length = m.end() - m.start()
+            if length == 0: continue
+            if best is None or length > (best[0].end()-best[0].start()) or (length == (best[0].end()-best[0].start()) and idx < best[2]):
+                best = (m, t_tipo, idx)
+        return best
+
+    def _next_token_internal(self) -> Optional[Token]:
+        if self.pos >= self.length: return None
+        start_pos_current = self.pos
+        start_line_current = self.linha
+        start_col_current = self.coluna
+
+        res = self._longest_match_at(start_pos_current)
+        if res is None:
+            bad_char = self.source[self.pos]
+            self.pos += 1
+            self._update_line_col(bad_char)
+            raise LexicalError(f"Caractere não reconhecido '{bad_char}'", start_line_current, start_col_current)
+
+        m, token_tipo, rule_idx = res
+        valor = m.group(0)
+        end_pos = m.end()
+        self.pos = end_pos
+        self._update_line_col(valor)
+
+        if token_tipo is None:
+            return self._next_token_internal()
+
+        if token_tipo == 'ID' and valor in PALAVRAS_CHAVE:
+            token_tipo = PALAVRAS_CHAVE[valor]
+
+        return Token(token_tipo, valor, start_line_current, start_col_current, start_pos_current, end_pos)
+
+    def next(self) -> Optional[Token]:
+        if self._buf: return self._buf.popleft()
+        return self._next_token_internal()
+
+    def peek(self, n: int = 1) -> Optional[Token]:
+        while len(self._buf) < n:
+            t = self._next_token_internal()
+            if t is None: break
+            self._buf.append(t)
+        return self._buf[n-1] if len(self._buf) >= n else None
+
+    def push_back(self, token: Token):
+        self._buf.appendleft(token)
+
+    def tokenize_all(self) -> List[Token]:
+        toks = []
+        while True:
+            t = self.next()
+            if t is None: break
+            toks.append(t)
+        return toks
+
+
 class TokenStream:
     def __init__(self, lexer: Lexer):
         self.lexer = lexer
@@ -243,8 +198,7 @@ class TokenStream:
     def _fill(self, n: int):
         while len(self.buffer) < n:
             t = self.lexer.next()
-            if t is None:
-                break
+            if t is None: break
             self.buffer.append(t)
 
     def peek(self, n: int = 1) -> Optional[Token]:
@@ -252,8 +206,7 @@ class TokenStream:
         return self.buffer[n-1] if len(self.buffer) >= n else None
 
     def next(self) -> Optional[Token]:
-        if self.buffer:
-            return self.buffer.popleft()
+        if self.buffer: return self.buffer.popleft()
         return self.lexer.next()
 
     def accept(self, tipo: str) -> Optional[Token]:
@@ -264,38 +217,14 @@ class TokenStream:
 
     def expect(self, tipo: str) -> Token:
         t = self.next()
-        if t is None:
-            raise SyntaxError(f"Esperado token {tipo}, mas chegou EOF")
-        if t.tipo != tipo:
-            raise SyntaxError(f"Esperado token {tipo}, mas chegou {t.tipo} em Ln{t.linha} Col{t.coluna}")
+        if t is None: raise SyntaxError(f"Esperado token {tipo}, mas chegou EOF")
+        if t.tipo != tipo: raise SyntaxError(f"Esperado token {tipo}, mas chegou {t.tipo} em Ln{t.linha} Col{t.coluna}")
         return t
 
     def match(self, *tipos: str) -> Optional[Token]:
         t = self.peek(1)
-        if t and t.tipo in tipos:
-            return self.next()
+        if t and t.tipo in tipos: return self.next()
         return None
 
-# -----------------------------
-# Exemplo de uso / teste rápido
-# -----------------------------
-if __name__ == "__main__":
-    exemplo = r'''
-    // comentário simples
-    func soma(a, b) {
-      return a + b;
-    }
-
-    dna"ACGT" prot"MK" "uma string" 123 4.56 7.8e-2 ...
-    '''
-    lx = Lexer(exemplo)
-    ts = TokenStream(lx)
-    print("Tokens:")
-    try:
-        while True:
-            t = ts.next()
-            if t is None:
-                break
-            print(t)
-    except LexicalError as e:
-        print("Erro léxico:", e)
+    def push_back(self, token: Token):
+        self.buffer.appendleft(token)

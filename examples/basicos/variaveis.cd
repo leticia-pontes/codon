@@ -1,0 +1,11 @@
+/" Declaração e manipulação de variáveis biológicas "/
+
+function main(): void {
+    especie = "Homo sapiens";
+    temperatura_corporal = 36.7;
+    ativo = true;
+
+    print("Espécie:", especie);
+    print("Temperatura corporal:", temperatura_corporal);
+    print("Organismo ativo?", ativo);
+}

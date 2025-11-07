@@ -1,0 +1,14 @@
+/" Representação de um nucleotídeo "/
+
+class Nucleotideo {
+    base: Nbase;
+    posicao: int;
+}
+
+function main(): void {
+    n1 = Nucleotideo();
+    n1.base = 'A';
+    n1.posicao = 1;
+
+    print("Nucleotídeo:", n1.base, "na posição", n1.posicao);
+}

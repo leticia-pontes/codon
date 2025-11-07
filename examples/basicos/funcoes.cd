@@ -1,0 +1,12 @@
+/" Função para calcular concentração molar "/
+
+function concentracao(moles: decimal, volume_L: decimal): decimal {
+    return moles / volume_L;
+}
+
+function main(): void {
+    mol = 0.02;
+    volume = 0.5;
+    C = concentracao(mol, volume);
+    print("Concentração:", C, "mol/L");
+}
