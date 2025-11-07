@@ -4,6 +4,8 @@ from collections import deque
 import re
 import sys
 
+from src.utils.erros import ErrorHandler, LexicalError
+
 # ---------------
 # Constantes (Regras e Palavras-chave)
 # ---------------
@@ -113,13 +115,14 @@ class LexicalError(Exception):
 
 
 class Lexer:
-    def __init__(self, source: str):
+    def __init__(self, source: str, error_handler=None):
         self.source = source
         self.length = len(source)
         self.pos = 0
         self.linha = 1
         self.coluna = 1
         self._buf: Deque[Token] = deque()
+        self.error_handler = error_handler or ErrorHandler()
 
     def _update_line_col(self, text: str):
         last_newline = text.rfind('\n')
@@ -141,7 +144,9 @@ class Lexer:
         return best
 
     def _next_token_internal(self) -> Optional[Token]:
-        if self.pos >= self.length: return None
+        if self.pos >= self.length:
+            return None
+
         start_pos_current = self.pos
         start_line_current = self.linha
         start_col_current = self.coluna
@@ -151,7 +156,14 @@ class Lexer:
             bad_char = self.source[self.pos]
             self.pos += 1
             self._update_line_col(bad_char)
-            raise LexicalError(f"Caractere não reconhecido '{bad_char}'", start_line_current, start_col_current)
+
+            # Ao invés de levantar exceção, registramos o erro
+            err = LexicalError(f"Caractere não reconhecido '{bad_char}'",
+                            start_line_current, start_col_current)
+            self.error_handler.report_error(err)
+
+            # Retorna None ou cria um token especial de erro
+            return None
 
         m, token_tipo, rule_idx = res
         valor = m.group(0)
@@ -165,7 +177,8 @@ class Lexer:
         if token_tipo == 'ID' and valor in PALAVRAS_CHAVE:
             token_tipo = PALAVRAS_CHAVE[valor]
 
-        return Token(token_tipo, valor, start_line_current, start_col_current, start_pos_current, end_pos)
+        return Token(token_tipo, valor, start_line_current,
+                    start_col_current, start_pos_current, end_pos)
 
     def next(self) -> Optional[Token]:
         if self._buf: return self._buf.popleft()

@@ -2,8 +2,13 @@ import unittest
 import os
 from src.lexer.analisador_lexico_completo import Lexer, TokenStream
 from src.parser.ast.ast_base import Parser, Programa
+from src.utils.erros import ErrorHandler, LexicalError
 
 EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'examples')
+
+EXPECTED_ERRORS = {
+    "sample_error.cd": LexicalError
+}
 
 class ExampleProgramsTest(unittest.TestCase):
     """
@@ -33,23 +38,41 @@ class ExampleProgramsTest(unittest.TestCase):
                     with open(path, "r", encoding="utf-8") as f:
                         codigo = f.read()
 
-                    # --- Lexer + Token Mapping ---
-                    lexer = Lexer(codigo)
-                    tokens = lexer.tokenize_all()  # lista de tokens
-                    # print("\t🟢 Tokens mapeados:")
-                    # for t in tokens:
-                    #     print(f"\t   {t.linha:>3}:{t.coluna:<3}  {t.tipo:<12}  {t.valor!r}")
+                    # --- Lexer ---
+                    error_handler = ErrorHandler()                # Cria apenas 1 handler
+                    lexer = Lexer(codigo, error_handler=error_handler)
+                    tokens = lexer.tokenize_all()                 # Gera tokens
 
                     # --- Parser ---
                     ts = TokenStream(lexer)
-                    parser = Parser(ts)
+                    parser = Parser(ts, error_handler=error_handler)  # Mesma instância
                     ast = parser.parse()
 
-                    self.assertIsInstance(ast, Programa)
-                    success.append(path)
+                    if 'sample_error.cd' in fname:
+                        self.assertTrue(parser.error_handler.has_errors())
+                        types = [type(e).__name__ for e in parser.error_handler.errors]
+                        self.assertIn("LexicalError", types)
+
+                    else:
+                        # Arquivo válido deve passar
+                        self.assertIsInstance(ast, Programa)
+                        self.assertFalse(parser.error_handler.has_errors(), msg=f"{fname} não deve gerar erros")
+                        success.append(path)
+
                 except Exception as e:
-                    print(f"\t🔴 ERRO: {str(e)}")
-                    failed.append((path, str(e)))
+                    # Aqui só imprimimos tokens quando houve erro
+                    print("\t🟡 Tokens antes do erro:")
+                    for t in tokens:
+                        print(f"\t   {t.linha:>3}:{t.coluna:<3}  {t.tipo:<12}  {t.valor!r}")
+
+                    # Checar se o erro era esperado (você pode definir uma lista de erros esperados por arquivo)
+                    erro_esperado = EXPECTED_ERRORS.get(fname)  # dict: {nome_arquivo: tipo_erro_esperado}
+                    if erro_esperado and isinstance(e, erro_esperado):
+                        print(f"\t🟢 ERRO esperado: {type(e).__name__} ✅")
+                        success.append(path)
+                    else:
+                        print(f"\t🔴 ERRO inesperado: {str(e)}")
+                        failed.append((path, str(e)))
 
         # ✅ Resumo final
         print("\n" + "=" * 60)

@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Optional, List, Tuple, Union
 import sys
 
+from src.utils.erros import ErrorHandler, LexicalError, SyntaxError
+
 # Importa as classes do Lexer
 try:
     from src.lexer.analisador_lexico_completo import TokenStream, Token
@@ -117,14 +119,29 @@ class CriacaoClasse(ASTNode):
 # 2. Classe Parser
 # ==========================================
 class Parser:
-    def __init__(self, ts: TokenStream):
+    def __init__(self, ts: TokenStream, error_handler=None):
         self.ts = ts
+        self.error_handler = error_handler or ErrorHandler()
 
     def parse(self) -> Programa:
         declaracoes = []
         while self.ts.peek():
-            declaracoes.append(self._declaracao())
+            try:
+                declaracoes.append(self._declaracao())
+            except (LexicalError, SyntaxError) as e:
+                self.error_handler.report_error(e)
+                # Consume token problemático para não travar
+                self.ts.next()
         return Programa(declaracoes)
+
+    def _skip_to_sync(self):
+        # Função para tentar sincronizar após um erro e continuar parsing
+        while True:
+            t = self.ts.peek()
+            if t is None or t.tipo in ("SEMI", "RBRACE"):
+                self.ts.next() if t else None
+                break
+            self.ts.next()
 
     def _declaracao(self) -> ASTNode:
         t = self.ts.peek()
@@ -172,12 +189,16 @@ class Parser:
         self.ts.expect("SEMI")
         return (nome, tipo)
 
-    def _tipo(self) -> Token:
+    def _tipo(self) -> Optional[Token]:
         tipo_token = self.ts.peek()
         if tipo_token and (tipo_token.tipo == 'KWD' or tipo_token.tipo == 'ID'):
-            self.ts.next()
-            return tipo_token
-        raise SyntaxError(f"Esperado tipo, mas encontrou {tipo_token.valor if tipo_token else 'EOF'}")
+            return self.ts.next()
+        self.error_handler.report_error(
+            SyntaxError(f"Esperado tipo, mas encontrou {tipo_token.valor if tipo_token else 'EOF'}",
+                        tipo_token.linha if tipo_token else -1,
+                        tipo_token.coluna if tipo_token else -1)
+        )
+        return None
 
     def _lista_param(self, com_tipo: bool = False) -> List[str]:
         params = []
@@ -339,28 +360,35 @@ class Parser:
     def _exp_primaria(self):
         t = self.ts.peek()
         if not t:
-            raise SyntaxError("Esperado expressão, mas EOF")
-        if t.tipo in ("DEC_INT","FLOAT","STRING","CHAR_LIT","DNA_LIT","RNA_LIT","PROT_LIT"):
-            self.ts.next()
-            if t.tipo=="DEC_INT": return Literal(int(t.valor))
-            if t.tipo=="FLOAT": return Literal(float(t.valor))
-            if t.tipo=="CHAR_LIT": return Literal(t.valor[1:-1])
-            if t.tipo=="STRING": return Literal(t.valor.strip('"'))
-            if t.tipo in ("DNA_LIT","RNA_LIT","PROT_LIT"):
-                valor = t.valor.split('"',1)[1].rsplit('"',1)[0]
-                return Literal(valor)
-        elif t.tipo=="LPAREN":
-            self.ts.next()
-            expr=self._expressao()
-            self.ts.expect("RPAREN")
-            return expr
-        elif t.tipo=="ID":
-            id_token=self.ts.next()
-            return Variavel(id_token.valor)
-        elif t.tipo=="KWD" and t.valor in ("true","false","null"):
-            self.ts.next()
-            return Literal(t.valor)
-        raise SyntaxError(f"Esperado expressão primária, mas chegou {t.valor} em Ln{t.linha} Col{t.coluna}")
+            self.error_handler.report_error(SyntaxError("Esperado expressão, mas EOF", -1, -1))
+            return Literal(None)
+        try:
+            if t.tipo in ("DEC_INT","FLOAT","STRING","CHAR_LIT","DNA_LIT","RNA_LIT","PROT_LIT"):
+                self.ts.next()
+                if t.tipo=="DEC_INT": return Literal(int(t.valor))
+                if t.tipo=="FLOAT": return Literal(float(t.valor))
+                if t.tipo=="CHAR_LIT": return Literal(t.valor[1:-1])
+                if t.tipo=="STRING": return Literal(t.valor.strip('"'))
+                if t.tipo in ("DNA_LIT","RNA_LIT","PROT_LIT"):
+                    valor = t.valor.split('"',1)[1].rsplit('"',1)[0]
+                    return Literal(valor)
+            elif t.tipo=="LPAREN":
+                self.ts.next()
+                expr=self._expressao()
+                self.ts.expect("RPAREN")
+                return expr
+            elif t.tipo=="ID":
+                id_token=self.ts.next()
+                return Variavel(id_token.valor)
+            elif t.tipo=="KWD" and t.valor in ("true","false","null"):
+                self.ts.next()
+                return Literal(t.valor)
+            else:
+                raise SyntaxError(f"Esperado expressão primária, mas chegou {t.valor}", t.linha, t.coluna)
+        except SyntaxError as e:
+            self.error_handler.report_error(e)
+            self._skip_to_sync()
+            return Literal(None)
 
     # --- Operadores binários e unários ---
     def _expressao(self) -> ASTNode:

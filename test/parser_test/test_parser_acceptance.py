@@ -46,7 +46,7 @@ class ParserAcceptanceTest(unittest.TestCase):
 
         codigo_fonte = r"""
 function transcrever(DNA: Dbase): Rbase {
-    RNA <- "";
+    RNA = "";
     i = 0;
     while(i < length(DNA)){
         if (DNA[i] == 'A'){
@@ -61,7 +61,7 @@ class Nucleotideo {
     base: Nbase;
     posicao: int;
 }
-sequence <- dna"ATCGTACG";
+sequence = dna"ATCGTACG";
 print(transcrever(sequence));
 """
         # 1. Análise Léxica
