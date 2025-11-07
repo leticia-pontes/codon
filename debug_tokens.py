@@ -1,7 +1,5 @@
 from src.lexer.analisador_lexico_completo import Lexer
 import src.lexer.analisador_lexico_completo as lex
-# print(f"REGRAS\n{lex.REGRAS}\n")
-# print(f"COMPILED REGRAS\n{lex._compiled_rules}\n")
 
 codigo = r'''
 /" Define a concentração padrão e o fator de diluição "/

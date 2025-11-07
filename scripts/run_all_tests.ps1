@@ -15,9 +15,13 @@ if (Test-Path ".venv/Scripts/Activate.ps1") {
 
 Write-Host "==> Instalando dependências..."
 pip install --upgrade pip
-pip install pytest
 
-Write-Host "==> Rodando pytest..."
-pytest -q
+# unittest é builtin, mas se houver libs extras, instale:
+if (Test-Path "requirements.txt") {
+    pip install -r requirements.txt
+}
+
+Write-Host "==> Rodando todos os testes com unittest..."
+python -m unittest discover -s test -p "*.py" -v
 
 Write-Host "==> Testes finalizados."

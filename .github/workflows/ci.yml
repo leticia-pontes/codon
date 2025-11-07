@@ -62,13 +62,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          set -euxo pipefail
           chmod +x scripts/run_all_tests.sh || true
-          
-          bash scripts/run_all_tests.sh || {
-            echo "run_all_tests.sh failed — fallback to pytest"
-            pytest test -q --junitxml=report.xml || ( echo "pytest also failed"; false )
-          }
+          bash scripts/run_all_tests.sh || { echo "run_all_tests.sh falhou"; exit 1; }
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
@@ -80,18 +75,12 @@ jobs:
           .\.venv\Scripts\Activate.ps1
           python -m pip install --upgrade pip --disable-pip-version-check
           if (Test-Path "requirements.txt") {
-            pip install --prefer-binary --no-input -r requirements.txt
+            pip install -r requirements.txt
           }
           if (Test-Path "scripts/run_all_tests.ps1") {
-            try {
-              .\scripts\run_all_tests.ps1
-            } catch {
-              Write-Host "run_all_tests.ps1 falhou. Fallback para pytest."
-              pytest test -q --junitxml=report.xml
-              if ($LASTEXITCODE -ne 0) { throw "pytest falhou" }
-            }
+            .\scripts\run_all_tests.ps1
           } else {
-            pytest test -q --junitxml=report.xml
+            python -m unittest discover -s test -p "*.py" -v
           }
 
       - name: Upload pytest JUnit (optional)

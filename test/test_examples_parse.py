@@ -8,7 +8,7 @@ EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), '..', 'examples')
 class ExampleProgramsTest(unittest.TestCase):
     """
     Testa se todos os programas de exemplo em examples/ são válidos
-    do ponto de vista sintático (lexer + parser).
+    do ponto de vista sintático (lexer + parser) e imprime tokens.
     """
 
     def test_all_examples_compile(self):
@@ -33,9 +33,16 @@ class ExampleProgramsTest(unittest.TestCase):
                     with open(path, "r", encoding="utf-8") as f:
                         codigo = f.read()
 
+                    # --- Lexer + Token Mapping ---
                     lexer = Lexer(codigo)
-                    tokens = TokenStream(lexer)
-                    parser = Parser(tokens)
+                    tokens = lexer.tokenize_all()  # lista de tokens
+                    # print("\t🟢 Tokens mapeados:")
+                    # for t in tokens:
+                    #     print(f"\t   {t.linha:>3}:{t.coluna:<3}  {t.tipo:<12}  {t.valor!r}")
+
+                    # --- Parser ---
+                    ts = TokenStream(lexer)
+                    parser = Parser(ts)
                     ast = parser.parse()
 
                     self.assertIsInstance(ast, Programa)
@@ -65,6 +72,7 @@ class ExampleProgramsTest(unittest.TestCase):
         if failed:
             msgs = "\n".join([f"- {p}: {err}" for p, err in failed])
             self.fail(f"\nOs seguintes exemplos falharam na análise sintática:\n{msgs}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
