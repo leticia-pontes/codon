@@ -14,6 +14,10 @@ class SyntaxError(BaseError):
     def __init__(self, message: str, line: int, col: int, code: str = "SYN000"):
         super().__init__(message, line, col, code)
 
+class SemanticError(BaseError):
+    def __init__(self, message: str, line: int, col: int, code: str = "SEM000"):
+        super().__init__(message, line, col, code)
+
 class ErrorHandler:
     def __init__(self):
         self.errors = []

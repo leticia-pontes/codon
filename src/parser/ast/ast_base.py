@@ -16,7 +16,9 @@ except ImportError:
 # 1. Definição dos Nós da AST
 # ==========================================
 class ASTNode:
-    pass
+    # Adicionando metadados de linha/coluna para o analisador semântico
+    line: int = -1
+    col: int = -1
 
 @dataclass
 class Programa(ASTNode):
@@ -25,7 +27,8 @@ class Programa(ASTNode):
 @dataclass
 class DeclaracaoFuncao(ASTNode):
     nome: str
-    parametros: List[str]
+    parametros: List[Tuple[str, str]] # Parâmetros agora são (nome, tipo)
+    tipo_retorno: str # Novo campo
     corpo: List[ASTNode]
     is_procedure: bool = False
 
@@ -72,7 +75,7 @@ class ExpressaoUnaria(ASTNode):
 
 @dataclass
 class Literal(ASTNode):
-    valor: Union[str, float, int]
+    valor: Union[str, float, int, bool, None] # Adicionado bool e None (null)
 
 @dataclass
 class LiteralRange(ASTNode):
@@ -126,16 +129,19 @@ class Parser:
         self.error_handler = error_handler or ErrorHandler()
 
     def parse(self) -> Programa:
+        # ... (Método parse, _skip_to_sync) ...
         declaracoes = []
         while self.ts.peek():
             t = self.ts.peek()
-            print(f"[DEBUG parse] peek={t.tipo if t else None}, valor={t.valor if t else None}")
+            # print(f"[DEBUG parse] peek={t.tipo if t else None}, valor={t.valor if t else None}")
             try:
-                declaracoes.append(self._declaracao())
+                decl = self._declaracao()
+                if decl:
+                    declaracoes.append(decl)
             except (LexicalError, SyntaxError) as e:
                 self.error_handler.report_error(e)
                 self.ts.next()
-        print(f"[DEBUG parse] Total de declarações: {len(declaracoes)}")
+        # print(f"[DEBUG parse] Total de declarações: {len(declaracoes)}")
         return Programa(declaracoes)
 
     def _skip_to_sync(self):
@@ -151,19 +157,11 @@ class Parser:
     # ==========================================
     def _declaracao(self) -> ASTNode:
         t = self.ts.peek()
-        if t:
-            print(f"[DEBUG _declaracao] peek tipo={t.tipo}, valor={t.valor}")
         if t and t.tipo == 'KWD':
-            if t.valor == 'function':
-                print("[DEBUG _declaracao] chamando _decl_funcao")
-                return self._decl_funcao(is_procedure=False)
-            elif t.valor == 'procedure':
-                print("[DEBUG _declaracao] chamando _decl_funcao como procedure")
-                return self._decl_funcao(is_procedure=True)
+            if t.valor == 'function' or t.valor == 'procedure':
+                return self._decl_funcao(is_procedure=(t.valor == 'procedure'))
             elif t.valor == 'class':
-                print("[DEBUG _declaracao] chamando _decl_classe")
                 return self._decl_classe()
-        print("[DEBUG _declaracao] tratando como instrucao")
         return self._instrucao()
 
     def _decl_funcao(self, is_procedure: bool) -> DeclaracaoFuncao:
@@ -173,16 +171,18 @@ class Parser:
 
         parametros = []
         if not self.ts.match("RPAREN"):
-            parametros_com_tipo = self._lista_param(com_tipo=True)
+            # Agora _lista_param retorna a lista de Tuples (nome, tipo)
+            parametros = self._lista_param()
             self.ts.expect("RPAREN")
-            parametros = [p.split(":")[0].strip() for p in parametros_com_tipo]
 
+        tipo_retorno = 'void'
         if not is_procedure:
             self.ts.expect("COLON")
-            self._tipo()
+            tipo_retorno = self._tipo().valor
 
         corpo = self._bloco()
-        return DeclaracaoFuncao(nome_token.valor, parametros, corpo, is_procedure)
+        # Passa o tipo de retorno para a AST
+        return DeclaracaoFuncao(nome_token.valor, parametros, tipo_retorno, corpo, is_procedure)
 
     def _decl_classe(self) -> DeclaracaoClasse:
         self.ts.expect("KWD")
@@ -201,9 +201,11 @@ class Parser:
         return (nome, tipo)
 
     def _tipo(self) -> Optional[Token]:
+        # Suporta tipos ID (classes) ou KWD (primitivos)
         tipo_token = self.ts.peek()
         if tipo_token and (tipo_token.tipo == 'KWD' or tipo_token.tipo == 'ID'):
-            return self.ts.next()
+            self.ts.next()
+            return tipo_token
         self.error_handler.report_error(
             SyntaxError(f"Esperado tipo, mas encontrou {tipo_token.valor if tipo_token else 'EOF'}",
                         tipo_token.linha if tipo_token else -1,
@@ -211,16 +213,14 @@ class Parser:
         )
         return None
 
-    def _lista_param(self, com_tipo: bool = False) -> List[str]:
+    def _lista_param(self) -> List[Tuple[str, str]]:
         params = []
         while True:
             param_id = self.ts.expect("ID").valor
-            if com_tipo and self.ts.peek() and self.ts.peek().tipo == "COLON":
-                self.ts.next()
-                tipo = self._tipo().valor
-                params.append(f"{param_id}: {tipo}")
-            else:
-                params.append(param_id)
+            self.ts.expect("COLON")
+            tipo = self._tipo().valor
+            params.append((param_id, tipo)) # Retorna como (nome, tipo)
+
             if not self.ts.match("COMMA"):
                 break
         return params
@@ -249,38 +249,41 @@ class Parser:
             elif t.valor == 'print':
                 return self._instrucao_print()
             elif t.valor in ('var', 'const'):
-                self.ts.next()
+                # Tratamento de declaração com var/const
+                self.ts.next() # consome var/const
                 id_token = self.ts.expect("ID")
                 self.ts.expect("ASSIGN")
                 valor = self._expressao()
                 self.ts.expect("SEMI")
+                # NOTA: O analisador semântico deve verificar se é 'const'
                 return InstrucaoAtribuicao(Variavel(id_token.valor), '=', valor)
+
+        # Chamada de função ou atribuição
         return self._instrucao_atribuicao_ou_chamada()
 
     def _instrucao_atribuicao_ou_chamada(self) -> ASTNode:
+        # Usa _exp_primaria_ou_acesso para capturar ID, ID(), ID.campo, ID[indice]
         alvo = self._exp_primaria_ou_acesso()
-        print(f"[DEBUG _instrucao_atribuicao_ou_chamada] alvo={alvo}, peek={self.ts.peek()}")
 
-        t = self.ts.peek()
-        print(f"[DEBUG atribuição ou chamada] peek={t.tipo if t else None}, valor={t.valor if t else None}")
         atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ","MINUS_EQ")
-        print(f"[DEBUG atribuição ou chamada] atrib_op={atrib_op}")
 
         if atrib_op:
             valor = self._expressao()
             self.ts.expect("SEMI")
-            print(f"[DEBUG _instrucao_atribuicao_ou_chamada] Atribuição: {alvo} {atrib_op.valor} {valor}")
             return InstrucaoAtribuicao(alvo, atrib_op.valor, valor)
+
+        # Se não é atribuição, deve ser uma expressão que é uma instrução (ex: Chamada de Função, Criação de Classe)
         elif isinstance(alvo, (ChamadaFuncao, CriacaoClasse)):
             self.ts.expect("SEMI")
-            print(f"[DEBUG _instrucao_atribuicao_ou_chamada] Chamada de função ou criação de classe: {alvo}")
-            return alvo
-        else:
-            self.ts.expect("SEMI")
-            print(f"[DEBUG _instrucao_atribuicao_ou_chamada] Expressão simples retornada: {alvo}")
             return alvo
 
+        else:
+            # Se for apenas uma variável ou literal no início de uma instrução, é um erro de sintaxe
+            self.ts.expect("SEMI")
+            return alvo # Retorna a expressão, será tratada como instrução de descarte se a semântica permitir.
+
     def _instrucao_if(self) -> InstrucaoIf:
+        # ... (Método _instrucao_if permanece o mesmo) ...
         self.ts.expect("KWD")
         self.ts.expect("LPAREN")
         condicao = self._expressao()
@@ -301,6 +304,7 @@ class Parser:
         return InstrucaoIf(condicao, bloco_if, elif_blocos, bloco_else)
 
     def _instrucao_while(self) -> InstrucaoLoopWhile:
+        # ... (Método _instrucao_while permanece o mesmo) ...
         self.ts.expect("KWD")
         self.ts.expect("LPAREN")
         condicao = self._expressao()
@@ -309,22 +313,27 @@ class Parser:
         return InstrucaoLoopWhile(condicao, corpo)
 
     def _instrucao_for(self) -> InstrucaoLoopFor:
-        self.ts.expect("KWD")
-        init_alvo = self._exp_primaria_ou_acesso()
-        init_op = self.ts.expect("ASSIGN").valor
-        init_valor = self._expressao()
-        inicializacao = InstrucaoAtribuicao(init_alvo, init_op, init_valor)
-        self.ts.expect("SEMI")
+        # O for é reescrito para suportar inicialização, condição e passo (C-style)
+        self.ts.expect("KWD") # 'for'
+        self.ts.expect("LPAREN")
+
+        # Inicialização: Apenas chamamos _instrucao_atribuicao_ou_chamada
+        # Assumindo que a inicialização deve ser uma instrução de atribuição/declaração
+        # NOTA: Aqui poderia ser um _instrucao_atribuicao_ou_chamada mais restrito (exigindo SEMI)
+        inicializacao = self._instrucao_atribuicao_ou_chamada() # Consome o SEMI interno
+
         condicao = self._expressao()
         self.ts.expect("SEMI")
-        passo_alvo = self._exp_primaria_ou_acesso()
-        passo_op_token = self.ts.match("ASSIGN","PLUS_EQ","MINUS_EQ","PLUS","MINUS")
-        passo_valor = Literal(1) if passo_op_token.valor in ("PLUS","MINUS") else self._expressao()
-        passo = InstrucaoAtribuicao(passo_alvo, passo_op_token.valor, passo_valor)
+
+        # Passo: Permite uma expressão ou atribuição (não consome SEMI)
+        passo = self._instrucao_atribuicao_ou_chamada()
+
+        self.ts.expect("RPAREN")
         corpo = self._bloco()
         return InstrucaoLoopFor(inicializacao, condicao, passo, corpo)
 
     def _instrucao_return(self) -> InstrucaoRetorno:
+        # ... (Método _instrucao_return permanece o mesmo) ...
         self.ts.expect("KWD")
         expressao = None
         if not self.ts.match("SEMI"):
@@ -333,9 +342,10 @@ class Parser:
         return InstrucaoRetorno(expressao)
 
     def _instrucao_print(self) -> InstrucaoImpressao:
+        # ... (Método _instrucao_print permanece o mesmo) ...
         self.ts.expect("KWD")
         self.ts.expect("LPAREN")
-        expr = self._exp_primaria_ou_acesso()
+        expr = self._expressao() # Usa _expressao para suportar qualquer tipo de expressão
         self.ts.expect("RPAREN")
         self.ts.expect("SEMI")
         return InstrucaoImpressao(expr)
@@ -344,51 +354,41 @@ class Parser:
     # --- Expressões ---
     # ==========================================
     def _exp_primaria_ou_acesso(self) -> ASTNode:
+        # ... (Método _exp_primaria_ou_acesso permanece o mesmo, é o loop de pós-fixado) ...
         node = self._exp_primaria()
-        print(f"[DEBUG _exp_primaria_ou_acesso] ponto inicial: {node}, peek={self.ts.peek()}")
 
         while True:
             peek = self.ts.peek()
-            if not peek:
-                print("[DEBUG _exp_primaria_ou_acesso] EOF atingido")
-                break
+            if not peek: break
 
-            print(f"[DEBUG _exp_primaria_ou_acesso] peek={peek.tipo} '{peek.valor}'")
-
-            # Chamada de função: somente se node for uma variável
-            if peek.tipo == 'LPAREN' and isinstance(node, Variavel):
+            # Chamada de função: sempre é `ID(...)` ou `ID.campo(...)`
+            if peek.tipo == 'LPAREN':
                 self.ts.next()
-                print("[DEBUG _exp_primaria_ou_acesso] LPAREN consumido para chamada de função")
                 argumentos = []
                 while self.ts.peek() and self.ts.peek().tipo != 'RPAREN':
                     arg = self._expressao()
-                    print(f"[DEBUG _exp_primaria_ou_acesso] argumento adicionado: {arg}")
                     argumentos.append(arg)
                     if self.ts.peek() and self.ts.peek().tipo == "COMMA":
-                        self.ts.next()  # consome a vírgula
-                        print("[DEBUG _exp_primaria_ou_acesso] COMMA consumido entre argumentos")
+                        self.ts.next()
                 self.ts.expect("RPAREN")
-                print("[DEBUG _exp_primaria_ou_acesso] RPAREN consumido para chamada de função")
                 node = ChamadaFuncao(node, argumentos)
+                continue # Continua o loop para encadear mais acessos
 
             # Acesso a campo (objeto.campo)
             elif self.ts.match("DOT"):
                 campo_token = self.ts.expect("ID")
-                print(f"[DEBUG _exp_primaria_ou_acesso] acesso a campo: {campo_token.valor}")
                 node = AcessoCampo(node, campo_token.valor)
+                continue
 
             # Acesso a índice (array[indice])
             elif self.ts.match("LBRACK"):
                 indice = self._expressao()
                 self.ts.expect("RBRACK")
-                print(f"[DEBUG _exp_primaria_ou_acesso] acesso a índice: {indice}")
                 node = AcessoArray(node, indice)
+                continue
 
             else:
-                print("[DEBUG _exp_primaria_ou_acesso] nada mais a processar")
                 break
-
-        print(f"[DEBUG _exp_primaria_ou_acesso] ponto final: {node}")
         return node
 
     def _exp_primaria(self):
@@ -397,37 +397,62 @@ class Parser:
             self.error_handler.report_error(SyntaxError("Esperado expressão, mas EOF", -1, -1))
             return Literal(None)
 
-        print(f"[DEBUG _exp_primaria] peek={t.tipo} '{t.valor}'")
-
         try:
+            # Literais Simples
             if t.tipo in ("DEC_INT","FLOAT","STRING","CHAR_LIT","DNA_LIT","RNA_LIT","PROT_LIT"):
                 self.ts.next()
-                print(f"[DEBUG _exp_primaria] literal consumido: {t.valor}")
                 if t.tipo=="DEC_INT": return Literal(int(t.valor))
                 if t.tipo=="FLOAT": return Literal(float(t.valor))
                 if t.tipo=="CHAR_LIT": return Literal(t.valor[1:-1])
                 if t.tipo=="STRING": return Literal(t.valor.strip('"'))
+                # Lógicas para tipos biológicos
                 if t.tipo in ("DNA_LIT","RNA_LIT","PROT_LIT"):
+                    # Extrai o valor do literal entre aspas
                     valor = t.valor.split('"',1)[1].rsplit('"',1)[0]
                     return Literal(valor)
 
+            # Expressão Agrupada
             elif t.tipo=="LPAREN":
                 self.ts.next()
-                print("[DEBUG _exp_primaria] LPAREN consumido para expressão agrupada")
                 expr = self._expressao()
                 self.ts.expect("RPAREN")
-                print("[DEBUG _exp_primaria] RPAREN consumido para expressão agrupada")
                 return expr
 
+            # ID (Variável)
             elif t.tipo=="ID":
                 id_token = self.ts.next()
-                print(f"[DEBUG _exp_primaria] ID consumido: {id_token.valor}")
                 return Variavel(id_token.valor)
 
+            # Literais Keyword: true, false, null
             elif t.tipo=="KWD" and t.valor in ("true","false","null"):
                 self.ts.next()
-                print(f"[DEBUG _exp_primaria] literal keyword consumido: {t.valor}")
-                return Literal(t.valor)
+                return Literal(True) if t.valor == 'true' else Literal(False) if t.valor == 'false' else Literal(None)
+
+            # Nova Palavra-chave: 'new' para CriacaoClasse ou CriacaoArray
+            elif t.tipo=="KWD" and t.valor == 'new':
+                self.ts.next()
+                class_type = self.ts.expect("ID").valor
+
+                if self.ts.match("LPAREN"):
+                    # Criação de Classe: new MinhaClasse(arg1, arg2)
+                    argumentos = []
+                    while self.ts.peek() and self.ts.peek().tipo != 'RPAREN':
+                        arg = self._expressao()
+                        argumentos.append(arg)
+                        if self.ts.peek() and self.ts.peek().tipo == "COMMA":
+                            self.ts.next()
+                    self.ts.expect("RPAREN")
+                    return CriacaoClasse(class_type, argumentos)
+
+                elif self.ts.match("LBRACK"):
+                    # Criação de Array: new int[tamanho]
+                    tamanho = self._expressao()
+                    self.ts.expect("RBRACK")
+                    return CriacaoArray(class_type, tamanho)
+
+            # Range Expression: expr..expr (Usado em For-Each, mas tratado aqui como expressão)
+            # NOTA: Range é um operador de baixa precedência, mas como literal é tratado aqui se for literal..literal
+            # Se for complexo, a expressão binária tratará. Vamos focar na binária.
 
             else:
                 raise SyntaxError(f"Esperado expressão primária, mas chegou {t.valor}", t.linha, t.coluna)
@@ -439,20 +464,33 @@ class Parser:
 
     # --- Operadores binários e unários ---
     def _expressao(self) -> ASTNode:
-        return self._exp_logica_or()
+        # Adiciona o operador de range '..' (DOT_DOT) antes do OR_OR por convenção de baixa precedência
+        return self._exp_range()
+
+    def _exp_range(self):
+        node = self._exp_logica_or()
+        if self.ts.match("DOT_DOT"):
+            direita = self._exp_range() # Associação da direita
+            # Se for uma expressão de range, retorna LiteralRange para análise semântica mais fácil
+            if isinstance(node, (Literal, Variavel)) and isinstance(direita, (Literal, Variavel)):
+                return LiteralRange(node, direita)
+            return ExpressaoBinaria(node, "..", direita)
+        return node
 
     def _exp_logica_or(self):
         node = self._exp_logica_and()
         while self.ts.match("OR_OR"):
+            op = self.ts.next().valor # consome '||'
             direita = self._exp_logica_and()
-            node = ExpressaoBinaria(node,"||",direita)
+            node = ExpressaoBinaria(node, op, direita)
         return node
 
     def _exp_logica_and(self):
         node = self._exp_relacional()
         while self.ts.match("AND_AND"):
+            op = self.ts.next().valor # consome '&&'
             direita = self._exp_relacional()
-            node = ExpressaoBinaria(node,"&&",direita)
+            node = ExpressaoBinaria(node, op, direita)
         return node
 
     def _exp_relacional(self):

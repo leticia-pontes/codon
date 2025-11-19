@@ -76,7 +76,7 @@ REGRAS = [
     (r'<', 'LT'),
     (r'&', 'AMP'),
     (r'\|', 'BAR'),
-    
+
     # Delimitadores
     (r'\(', 'LPAREN'),
     (r'\)', 'RPAREN'),
@@ -91,7 +91,7 @@ REGRAS = [
 # Compila as regexes com re.UNICODE e re.DOTALL para garantir a leitura correta de caracteres acentuados.
 # re.DOTALL (re.S) faz com que '.' case com TUDO, incluindo \n, essencial para BLOCK_COMMENT.
 regex_regras = [
-    (re.compile(regex, re.UNICODE | re.DOTALL), token_tipo) 
+    (re.compile(regex, re.UNICODE | re.DOTALL), token_tipo)
     for regex, token_tipo in REGRAS
 ]
 
@@ -107,7 +107,7 @@ def analise_lexica(codigo_fonte):
     while pos < len(codigo_fonte):
         match = None
         token_tipo = None
-        
+
         # 1. Tenta casar com as regras de tokenização na ordem de prioridade
         for regex, t_tipo in regex_regras:
             m = regex.match(codigo_fonte, pos)
@@ -115,7 +115,7 @@ def analise_lexica(codigo_fonte):
                 match = m
                 token_tipo = t_tipo
                 break
-        
+
         if match:
             valor = match.group(0)
             proxima_pos = match.end()
@@ -123,7 +123,7 @@ def analise_lexica(codigo_fonte):
 
             # 2. Tratamento de Elementos Ignorados (Espaços e Comentários)
             if token_tipo is None:
-                
+
                 # Conta quebras de linha dentro do token ignorado (WS, NEWLINE, Comentários)
                 for char in valor:
                     if char == '\n':
@@ -131,7 +131,7 @@ def analise_lexica(codigo_fonte):
                         coluna = 1
                     else:
                         coluna += 1
-                
+
                 pos = proxima_pos
                 continue
 
@@ -147,13 +147,13 @@ def analise_lexica(codigo_fonte):
             # Incrementa a coluna com o tamanho do token (para o PRÓXIMO token)
             coluna += tamanho_token
             pos = proxima_pos
-        
+
         else:
             # 6. Trata Erro Léxico (Requisito da tarefa)
             caractere_invalido = codigo_fonte[pos]
             print(f"\nERRO LÉXICO: Caractere não reconhecido '{caractere_invalido}' "
                   f"encontrado na Linha {linha}, Coluna {coluna}.")
-            
+
             # Retorna o token de erro e encerra, conforme a exigência de reportar o erro
             # e parar a análise.
             return [Token("LEXICAL_ERROR", caractere_invalido, linha, coluna)]
@@ -174,9 +174,9 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Uso: python lexer.py <arquivo_fonte.cd>")
         sys.exit(1)
-    
+
     caminho_arquivo = sys.argv[1]
-    
+
     try:
         # Garante a leitura do arquivo como UTF-8
         with open(caminho_arquivo, 'r', encoding='utf-8') as f:
