@@ -86,7 +86,8 @@ PALAVRAS_CHAVE = {
     "null": "KWD", "pub": "KWD", "extern": "KWD", "use": "KWD", "class": "KWD",
     "int": "KWD", "decimal": "KWD", "bool": "KWD", "string": "KWD", "list": "KWD",
     "vector": "KWD", "Nbase": "KWD", "void": "KWD", "print": "KWD", "Dbase": "KWD", "Rbase": "KWD",
-    "new": "KWD"
+    "new": "KWD",
+    "extends": "KWD"
 }
 
 _compiled_rules = [(re.compile(r), t) for r, t in REGRAS]

@@ -5,12 +5,12 @@ class Enzima {
     atividade: decimal;
 }
 
-function mostrar(e: Enzima) {
-    print("Enzima:", e.nome, "atividade:", e.atividade);
+function mostrar(e: Enzima): void {
+    print("Enzima:");
 }
 
 function main(): void {
-    e = Enzima();
+    var e = new Enzima();
     e.nome = "Lactase";
     e.atividade = 7.2;
     mostrar(e);

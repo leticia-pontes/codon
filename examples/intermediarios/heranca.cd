@@ -6,6 +6,7 @@ class Sequencia {
 
 class DNA extends Sequencia {
     bases: string;
+    comprimento: int;
 }
 
 class RNA extends Sequencia {
@@ -13,9 +14,9 @@ class RNA extends Sequencia {
 }
 
 function main(): void {
-    dna_seq = DNA();
+    var dna_seq = new DNA();
     dna_seq.bases = "ATCGTACG";
     dna_seq.comprimento = length(dna_seq.bases);
 
-    print("DNA:", dna_seq.bases, "tamanho:", dna_seq.comprimento);
+    print("DNA:");
 }
