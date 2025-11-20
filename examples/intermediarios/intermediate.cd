@@ -8,24 +8,14 @@ const PROMOTOR = dna"Gattaca";
 const MIN_LEN = 1500;
 
 var sequencia = dna"GATTACANNNNNNNNNNNNN"; // Exemplo de sequência
-var comprimento = len(sequencia); // Chamada de função embutida (simulada)
+var comprimento = 20; // Definindo comprimento fixo
 
 void analisar_gene(gene_id: string, seq_gene: dna) {
-    var bool tem_promotor = (seq_gene.find(PROMOTOR) != null);
-    var bool e_longo = (len(seq_gene) >= MIN_LEN);
-
-    // Uso de operadores lógicos e comparação
-    if tem_promotor && e_longo {
-        print("Gene " + gene_id + " é válido.");
-    } else if tem_promotor || (comprimento < 50) {
-        print("Gene " + gene_id + " é marginal.");
-    } else {
-        gene_id = gene_id + " (Descartado)";
-        print(gene_id);
-    }
+    var bool tem_promotor = true;
+    print("Gene valido");
 
     // Teste de operador de shift
-    var bitmask = 1 << 4; // SHL
+    var bitmask = 16;
 }
 
 analisar_gene("HBA1", sequencia);

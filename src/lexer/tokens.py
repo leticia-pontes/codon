@@ -38,15 +38,19 @@ TOKEN_KINDS = {
 
 @dataclass
 class Token:
-    """Representação de um Token."""
-    kind: str
-    lexeme: str
+    """
+    Representação de um Token.
+    CORRIGIDO: kind -> tipo, lexeme -> valor, line -> linha, col -> coluna.
+    """
+    tipo: str # Antigo: kind
+    valor: str # Antigo: lexeme
     literal: Any
-    line: int
-    col: int
+    linha: int # Antigo: line
+    coluna: int # Antigo: col
 
     def __repr__(self):
-        return f"Token({self.kind}, '{self.lexeme}', L{self.line}:C{self.col})"
+        # CORRIGIDO: Usando os novos nomes de atributos
+        return f"Token({self.tipo}, '{self.valor}', L{self.linha}:C{self.coluna})"
 
 class TokenStream:
     """Stream de tokens com capacidades de peek/expect para o Parser."""
@@ -58,7 +62,11 @@ class TokenStream:
         """Retorna o token atual ou futuro sem consumir."""
         index = self._current + offset
         if index >= len(self._tokens):
-            return Token('EOF', '', None, self._tokens[-1].line if self._tokens else 1, self._tokens[-1].col if self._tokens else 1)
+            # CORRIGIDO: Criação do EOF usando .linha e .coluna do último token
+            ultimo_token = self._tokens[-1] if self._tokens else None
+            linha_eof = ultimo_token.linha if ultimo_token else 1
+            coluna_eof = ultimo_token.coluna if ultimo_token else 1
+            return Token('EOF', '', None, linha_eof, coluna_eof)
         return self._tokens[index]
 
     def current(self) -> Token:
@@ -70,13 +78,15 @@ class TokenStream:
     def next(self) -> Token:
         """Consome e retorna o próximo token."""
         token = self.peek()
-        if token.kind != 'EOF':
+        # CORRIGIDO: Usando token.tipo (antigo .kind)
+        if token.tipo != 'EOF':
             self._current += 1
         return token
 
     def accept(self, *expected_kinds: str) -> bool:
         """Consome o token se o tipo casar com um dos esperados."""
-        if self.peek().kind in expected_kinds:
+        # CORRIGIDO: Usando self.peek().tipo (antigo .kind)
+        if self.peek().tipo in expected_kinds:
             self.next()
             return True
         return False
@@ -84,11 +94,15 @@ class TokenStream:
     def expect(self, expected_kind: str, expected_lexeme: str = None) -> Token:
         """Consome o token ou lança SyntaxError."""
         token = self.peek()
-        if token.kind == expected_kind and (expected_lexeme is None or token.lexeme == expected_lexeme):
+
+        # CORRIGIDO: Usando token.tipo (antigo .kind) e token.valor (antigo .lexeme)
+        if token.tipo == expected_kind and (expected_lexeme is None or token.valor == expected_lexeme):
             self.next()
             return token
 
         from ...utils.erros import SyntaxError
 
         expected_info = f"'{expected_lexeme}'" if expected_lexeme else expected_kind
-        raise SyntaxError(f"Esperado {expected_info}, mas chegou '{token.lexeme}' ({token.kind}).", token.line, token.col)
+
+        # CORRIGIDO: Usando token.valor, token.tipo, token.linha e token.coluna
+        raise SyntaxError(f"Esperado {expected_info}, mas chegou '{token.valor}' ({token.tipo}).", token.linha, token.coluna)

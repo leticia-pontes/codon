@@ -12,7 +12,7 @@ from .tabela_simbolos import Symbol, SymbolTable
 # --- Utilitários de Tipo e Helpers ---
 
 def _infer_literal_type(value) -> str:
-    """Função para inferir o tipo de um Literal (int, float, bool, string)."""
+    """Função para inferir o tipo de um Literal (int, float, bool, string, char)."""
     if isinstance(value, int):
         return 'int'
     if isinstance(value, float):
@@ -20,8 +20,8 @@ def _infer_literal_type(value) -> str:
     if isinstance(value, bool):
         return 'bool'
     if isinstance(value, str):
-        # Assumindo que strings simples são 'string'
-        return 'string'
+        # Char literal vira string de tamanho 1; distinguir aqui
+        return 'char' if len(value) == 1 else 'string'
     return 'unknown_type'
 
 def _get_binary_result_type(op: str, left_type: str, right_type: str) -> Optional[str]:
@@ -30,17 +30,24 @@ def _get_binary_result_type(op: str, left_type: str, right_type: str) -> Optiona
     comparison_ops = {'==', '!=', '>', '<', '>=', '<='}
     logical_ops = {'&&', '||'}
 
+    numeric = {'int','float','decimal'}
+
     # 1. Operadores Aritméticos e Concatenção de String
     if op in arithmetic_ops:
-        if left_type in {'int','float'} and right_type in {'int','float'}:
-            return 'float' if 'float' in {left_type, right_type} else 'int'
+        if left_type in numeric and right_type in numeric:
+            if 'decimal' in {left_type, right_type}:
+                return 'decimal'
+            if 'float' in {left_type, right_type}:
+                return 'float'
+            return 'int'
         if op == '+' and left_type == 'string' and right_type == 'string':
             return 'string'
         return None
 
     # 2. Operadores de Comparação
     if op in comparison_ops:
-        if (left_type in {'int', 'float'} and right_type in {'int', 'float'}) or \
+        numeric = {'int','float','decimal'}
+        if (left_type in numeric and right_type in numeric) or \
            (left_type == right_type == 'string'):
             return 'bool'
         return None
@@ -68,13 +75,15 @@ class SemanticAnalyzer:
         self.current_function: Optional[Symbol] = None
         self.found_return_in_current_function: bool = False
 
-        self.primitive_types = {"int", "float", "bool", "string", "dna", "rna", "prot", "void"}
+        self.primitive_types = {"int", "float", "decimal", "bool", "char", "string", "dna", "rna", "prot", "Nbase", "void"}
         self._initialize_global_scope()
 
     def _initialize_global_scope(self):
-        """Registra tipos primitivos no escopo global."""
+        """Registra tipos primitivos e funções built-in no escopo global."""
         for t_name in self.primitive_types:
             self.global_scope.define(Symbol(t_name, t_name, 'type'), self.error_handler)
+        # Built-ins mínimos
+        self.global_scope.define(Symbol('length', 'int', 'function', param_count=1), self.error_handler)
 
     def _get_coords(self, node: ASTNode) -> Tuple[int, int]:
         """Tenta extrair linha/coluna do nó da AST."""
@@ -100,9 +109,9 @@ class SemanticAnalyzer:
             self._analyze_declaration(decl)
 
         if not self.error_handler.has_errors():
-            print("\nAnálise Semântica concluída sem erros. ✅\n")
+            print("\nAnalise Semantica concluida sem erros.\n")
         else:
-            print(f"Análise Semântica concluída com {len(self.error_handler.errors)} erros. ❌\n")
+            print(f"Analise Semantica concluida com {len(self.error_handler.errors)} erros.\n")
 
     # --- Registro ---
     def _register_function(self, decl: DeclaracaoFuncao):
@@ -189,8 +198,8 @@ class SemanticAnalyzer:
         for stmt in decl.corpo:
             self._analyze_stmt(stmt)
 
-        # SEM008: Função não-procedure sem return
-        if not self.current_function.is_procedure and not self.found_return_in_current_function:
+        # SEM008: Função não-procedure sem return (exceção para retorno void)
+        if (not self.current_function.is_procedure) and (self.current_function.type != 'void') and (not self.found_return_in_current_function):
             line, col = self._get_coords(decl)
             self.error_handler.report_error(SemanticError(
                 f"Função '{decl.nome}' (não-procedure) requer uma instrução 'return'.", line, col, "SEM008"
@@ -277,12 +286,18 @@ class SemanticAnalyzer:
             expected_type = var_symbol.type
             if expected_type != 'unknown_type' and rhs_type != 'unknown_type':
                 if expected_type != rhs_type:
-                    # Permite int -> float promotion
-                    if not (expected_type == 'float' and rhs_type == 'int'):
-                        self.error_handler.report_error(SemanticError(
-                            f"Tipo incompatível na atribuição: '{expected_type}' := '{rhs_type}'",
-                            line, col, "SEM015"
-                        ))
+                    # Regras de compatibilidade numérica e casos especiais
+                    numeric = {'int','float','decimal'}
+                    if expected_type in numeric and rhs_type in numeric:
+                        # Permite promoções numéricas (int->float/decimal, float<->decimal)
+                        return
+                    if expected_type == 'Nbase' and rhs_type == 'char':
+                        return
+                    # Caso contrário, erro SEM015
+                    self.error_handler.report_error(SemanticError(
+                        f"Tipo incompatível na atribuição: '{expected_type}' := '{rhs_type}'",
+                        line, col, "SEM015"
+                    ))
 
         elif isinstance(alvo, (AcessoCampo, AcessoArray)):
             # Analisa o acesso para obter o tipo do alvo (LHS type)
@@ -291,7 +306,12 @@ class SemanticAnalyzer:
 
             # SEM015: Checagem de compatibilidade de tipo (do acesso com o RHS)
             if alvo_type != 'unknown_type' and rhs_type != 'unknown_type':
-                if alvo_type != rhs_type and not (alvo_type == 'float' and rhs_type == 'int'):
+                if alvo_type != rhs_type:
+                    numeric = {'int','float','decimal'}
+                    if alvo_type in numeric and rhs_type in numeric:
+                        return
+                    if alvo_type == 'Nbase' and rhs_type == 'char':
+                        return
                     self.error_handler.report_error(SemanticError(
                         f"Tipo incompatível na atribuição por acesso: '{alvo_type}' := '{rhs_type}'",
                         line, col, "SEM015"
@@ -432,6 +452,13 @@ class SemanticAnalyzer:
                 func_symbol = self.current_scope.lookup(fn_name)
 
                 if func_symbol is None or func_symbol.kind != 'function':
+                    # Se não é função, tenta tratar como construção de classe: Classe()
+                    class_symbol = self.current_scope.lookup(fn_name) or self.global_scope.lookup(fn_name)
+                    if class_symbol and class_symbol.kind == 'class':
+                        # Analisa os argumentos (efeitos colaterais de tipos)
+                        for a in expr.argumentos:
+                            self._analyze_expr(a)
+                        return class_symbol.type
                     # SEM005: Função não definida
                     self.error_handler.report_error(SemanticError(
                         f"Chamada para função não definida: '{fn_name}'", line, col, "SEM005"))
@@ -506,7 +533,7 @@ class SemanticAnalyzer:
             for a in expr.argumentos:
                 self._analyze_expr(a)
             # Retorna o nome da classe
-            return expr.nome
+            return expr.classe
 
         elif isinstance(expr, CriacaoArray):
             # Analisa o tamanho
@@ -518,7 +545,7 @@ class SemanticAnalyzer:
                 ))
 
             # Retorna o tipo do array no formato 'Array<Tipo>'
-            return f'Array<{expr.tipo_base}>'
+            return f'Array<{expr.tipo}>'
 
         # Caso de fallback
         return 'unknown_type'

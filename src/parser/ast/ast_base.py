@@ -158,8 +158,8 @@ class Parser:
     def _declaracao(self) -> ASTNode:
         t = self.ts.peek()
         if t and t.tipo == 'KWD':
-            if t.valor == 'function' or t.valor == 'procedure':
-                return self._decl_funcao(is_procedure=(t.valor == 'procedure'))
+            if t.valor == 'function' or t.valor == 'procedure' or t.valor == 'void':
+                return self._decl_funcao(is_procedure=(t.valor in ('procedure','void')))
             elif t.valor == 'class':
                 return self._decl_classe()
         return self._instrucao()
@@ -187,6 +187,11 @@ class Parser:
     def _decl_classe(self) -> DeclaracaoClasse:
         self.ts.expect("KWD")
         nome_token = self.ts.expect("ID")
+        # Suporte opcional a 'extends NomeBase'
+        nxt = self.ts.peek()
+        if nxt and ((nxt.tipo == 'KWD' and nxt.valor == 'extends') or (nxt.tipo == 'ID' and nxt.valor == 'extends')):
+            self.ts.next()  # consome 'extends'
+            _ = self.ts.expect("ID")  # nome da superclasse (ignorado nesta AST)
         self.ts.expect("LBRACE")
         campos = []
         while not self.ts.match("RBRACE"):
@@ -249,17 +254,33 @@ class Parser:
             elif t.valor == 'print':
                 return self._instrucao_print()
             elif t.valor in ('var', 'const'):
-                # Tratamento de declaração com var/const
-                self.ts.next() # consome var/const
-                id_token = self.ts.expect("ID")
-                self.ts.expect("ASSIGN")
-                valor = self._expressao()
-                self.ts.expect("SEMI")
-                # NOTA: O analisador semântico deve verificar se é 'const'
-                return InstrucaoAtribuicao(Variavel(id_token.valor), '=', valor)
+                return self._decl_var_const()
 
         # Chamada de função ou atribuição
         return self._instrucao_atribuicao_ou_chamada()
+
+    def _decl_var_const(self) -> Optional[ASTNode]:
+        kw = self.ts.expect("KWD")  # 'var' ou 'const'
+        # Tenta detectar formato tipado: Tipo (ID/KWD) [ [] ] ... Ident
+        var_name_token = None
+        t1 = self.ts.peek()
+        t2 = self.ts.peek(2)
+        if t1 and (t1.tipo in ("KWD","ID")) and t2 and (t2.tipo in ("ID","LBRACK")):
+            self.ts.next()  # consome tipo
+            # consome pares [] opcionais (ex: int[])
+            while self.ts.match("LBRACK"):
+                self.ts.expect("RBRACK")
+            var_name_token = self.ts.expect("ID")
+        else:
+            var_name_token = self.ts.expect("ID")
+        # Atribuição opcional
+        if self.ts.match("ASSIGN"):
+            valor = self._expressao()
+            self.ts.expect("SEMI")
+            return InstrucaoAtribuicao(Variavel(var_name_token.valor), '=', valor)
+        else:
+            self.ts.expect("SEMI")
+            return None
 
     def _instrucao_atribuicao_ou_chamada(self) -> ASTNode:
         # Usa _exp_primaria_ou_acesso para capturar ID, ID(), ID.campo, ID[indice]
@@ -283,24 +304,37 @@ class Parser:
             return alvo # Retorna a expressão, será tratada como instrução de descarte se a semântica permitir.
 
     def _instrucao_if(self) -> InstrucaoIf:
-        # ... (Método _instrucao_if permanece o mesmo) ...
+        # Aceita if com ou sem parênteses na condição
         self.ts.expect("KWD")
-        self.ts.expect("LPAREN")
-        condicao = self._expressao()
-        self.ts.expect("RPAREN")
+        if self.ts.match("LPAREN"):
+            condicao = self._expressao()
+            self.ts.expect("RPAREN")
+        else:
+            condicao = self._expressao()
         bloco_if = self._bloco()
         elif_blocos = []
         while self.ts.peek() and self.ts.peek().valor == 'elif':
             self.ts.next()
-            self.ts.expect("LPAREN")
-            elif_cond = self._expressao()
-            self.ts.expect("RPAREN")
+            if self.ts.match("LPAREN"):
+                elif_cond = self._expressao()
+                self.ts.expect("RPAREN")
+            else:
+                elif_cond = self._expressao()
             elif_bloco = self._bloco()
             elif_blocos.append((elif_cond, elif_bloco))
         bloco_else = None
         if self.ts.peek() and self.ts.peek().valor == 'else':
             self.ts.next()
-            bloco_else = self._bloco()
+            # Suporta 'else if (...) { ... }' como um 'elif' adicional
+            if self.ts.peek() and self.ts.peek().valor == 'if':
+                self.ts.next()
+                self.ts.expect("LPAREN")
+                elif_cond = self._expressao()
+                self.ts.expect("RPAREN")
+                elif_bloco = self._bloco()
+                elif_blocos.append((elif_cond, elif_bloco))
+            else:
+                bloco_else = self._bloco()
         return InstrucaoIf(condicao, bloco_if, elif_blocos, bloco_else)
 
     def _instrucao_while(self) -> InstrucaoLoopWhile:
@@ -313,24 +347,34 @@ class Parser:
         return InstrucaoLoopWhile(condicao, corpo)
 
     def _instrucao_for(self) -> InstrucaoLoopFor:
-        # O for é reescrito para suportar inicialização, condição e passo (C-style)
-        self.ts.expect("KWD") # 'for'
-        self.ts.expect("LPAREN")
+        # Suporta variantes com e sem parênteses
+        self.ts.expect("KWD")  # 'for'
+        has_parens = self.ts.match("LPAREN") is not None
 
-        # Inicialização: Apenas chamamos _instrucao_atribuicao_ou_chamada
-        # Assumindo que a inicialização deve ser uma instrução de atribuição/declaração
-        # NOTA: Aqui poderia ser um _instrucao_atribuicao_ou_chamada mais restrito (exigindo SEMI)
-        inicializacao = self._instrucao_atribuicao_ou_chamada() # Consome o SEMI interno
+        # Inicialização (consome ';' internamente)
+        inicializacao = self._instrucao_atribuicao_ou_chamada()
 
         condicao = self._expressao()
         self.ts.expect("SEMI")
 
-        # Passo: Permite uma expressão ou atribuição (não consome SEMI)
-        passo = self._instrucao_atribuicao_ou_chamada()
+        # Passo (não consome ';')
+        passo = self._atribuicao_ou_chamada_sem_semi()
 
-        self.ts.expect("RPAREN")
+        if has_parens:
+            self.ts.expect("RPAREN")
         corpo = self._bloco()
         return InstrucaoLoopFor(inicializacao, condicao, passo, corpo)
+
+    def _atribuicao_ou_chamada_sem_semi(self) -> ASTNode:
+        alvo = self._exp_primaria_ou_acesso()
+        atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ","MINUS_EQ")
+        if atrib_op:
+            valor = self._expressao()
+            return InstrucaoAtribuicao(alvo, atrib_op.valor, valor)
+        elif isinstance(alvo, (ChamadaFuncao, CriacaoClasse)):
+            return alvo
+        else:
+            return alvo
 
     def _instrucao_return(self) -> InstrucaoRetorno:
         # ... (Método _instrucao_return permanece o mesmo) ...
@@ -346,6 +390,9 @@ class Parser:
         self.ts.expect("KWD")
         self.ts.expect("LPAREN")
         expr = self._expressao() # Usa _expressao para suportar qualquer tipo de expressão
+        # Consome argumentos extras separados por vírgula, ignorando-os na AST simplificada
+        while self.ts.match("COMMA"):
+            _ = self._expressao()
         self.ts.expect("RPAREN")
         self.ts.expect("SEMI")
         return InstrucaoImpressao(expr)
@@ -431,7 +478,12 @@ class Parser:
             # Nova Palavra-chave: 'new' para CriacaoClasse ou CriacaoArray
             elif t.tipo=="KWD" and t.valor == 'new':
                 self.ts.next()
-                class_type = self.ts.expect("ID").valor
+                # Tipo pode ser ID (classe) ou KWD (primitivo)
+                tipo_token = self.ts.peek()
+                if not tipo_token or tipo_token.tipo not in ("ID","KWD"):
+                    self.ts.expect("ID")
+                self.ts.next()
+                class_type = tipo_token.valor
 
                 if self.ts.match("LPAREN"):
                     # Criação de Classe: new MinhaClasse(arg1, arg2)
@@ -469,7 +521,7 @@ class Parser:
 
     def _exp_range(self):
         node = self._exp_logica_or()
-        if self.ts.match("DOT_DOT"):
+        if self.ts.match("DOT2"):
             direita = self._exp_range() # Associação da direita
             # Se for uma expressão de range, retorna LiteralRange para análise semântica mais fácil
             if isinstance(node, (Literal, Variavel)) and isinstance(direita, (Literal, Variavel)):
