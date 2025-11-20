@@ -3,15 +3,15 @@ from src.utils.erros import ErrorHandler, SemanticError
 
 class Symbol:
     """Representa um símbolo (variável, função, etc.) na Tabela de Símbolos."""
-    def __init__(self, name: str, type_name: str, kind: str, line: int = -1, column: int = -1, **kwargs):
+    def __init__(self, name: str, type_: str, kind: str, line: int = -1, col: int = -1, **kwargs):
         self.name = name
-        self.type_name = type_name
+        self.type = type_
         self.kind = kind
         self.line = line
-        self.column = column
+        self.col = col
 
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 class SymbolTable:
     """Gerencia a Tabela de Símbolos e escopos aninhados."""
@@ -21,12 +21,12 @@ class SymbolTable:
         self.symbols: Dict[str, Symbol] = {} # name -> Symbol
         self.children: List['SymbolTable'] = [] # Child SymbolTable objects
 
-    def define(self, symbol: Symbol, error_handler: ErrorHandler):
-        """Define um novo símbolo no escopo atual, verificando redeclaração."""
+    def define(self, symbol: Symbol, error_handler: ErrorHandler) -> bool:
+        """Define um novo símbolo no escopo atual, verificando redeclaração (SEM001)."""
         if symbol.name in self.symbols:
             error_handler.report_error(SemanticError(
                 f"Símbolo '{symbol.name}' já foi declarado neste escopo.",
-                symbol.line, symbol.column, "SEM001" # Usando um código de erro sugerido
+                symbol.line, symbol.col, "SEM001"
             ))
             return False
         self.symbols[symbol.name] = symbol
@@ -43,8 +43,6 @@ class SymbolTable:
     def enter_scope(self, scope_name: str = "local") -> 'SymbolTable':
         """Cria e entra em um novo escopo aninhado."""
         new_scope = SymbolTable(parent=self, scope_name=scope_name)
-        # O novo escopo se torna filho do escopo atual, mas o Analisador Semântico
-        # é responsável por atualizar o 'current_scope'
         self.children.append(new_scope)
         return new_scope
 

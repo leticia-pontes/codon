@@ -17,9 +17,10 @@ class TestSemanticClasses(unittest.TestCase):
     def test_duplicate_field(self):
         cls = DeclaracaoClasse(
             nome="DNA",
+            # Tipos corrigidos para minúsculo
             campos=[
-                ("seq", "String"),
-                ("seq", "String")  # duplicado
+                ("seq", "string"), 
+                ("seq", "string")  # duplicado
             ]
         )
 
@@ -35,16 +36,16 @@ class TestSemanticClasses(unittest.TestCase):
 
 
     def test_access_field_of_variable(self):
-        cls = DeclaracaoClasse("A", [("x", "Int")])
+        # Tipo corrigido para 'int'
+        cls = DeclaracaoClasse("A", [("x", "int")])
 
-        # Envolve as instruções em uma função 'main' para o analisador processar
         main_func = DeclaracaoFuncao(
             "main",
             [],
-            "void", # Procedure
+            "void", # Tipo de retorno
             [
-                InstrucaoAtribuicao(Variavel("a"), "=", Literal(10)), # 'a' se torna Int
-                AcessoCampo(Variavel("a"), "x")
+                InstrucaoAtribuicao(Variavel("a"), "=", Literal(10)), # 'a' se torna 'int'
+                AcessoCampo(Variavel("a"), "x") # Tenta acessar 'x' em 'a' (int)
             ],
             is_procedure=True
         )
@@ -52,6 +53,9 @@ class TestSemanticClasses(unittest.TestCase):
         prog = Programa([cls, main_func])
         eh = self.run_analyzer(prog.declaracoes)
 
-        # Assumindo que o acesso a campo de tipo primitivo ainda não está gerando erro (AttributeError foi corrigido)
-        self.assertEqual(len(eh.errors), 0,
-            msg=f"Esperado 0 erros, mas encontrou {len(eh.errors)}. Erros: {eh.errors}")
+        # CORREÇÃO: Deve falhar com SEM026, pois 'a' é um int e não uma classe.
+        self.assertEqual(len(eh.errors), 1,
+            msg=f"Esperado 1 erro (SEM026) ao acessar campo de tipo primitivo. Erros: {eh.errors}")
+        self.assertIsInstance(eh.errors[0], SemanticError)
+        self.assertIn("Acesso a campo ('x') de tipo inválido ou indefinido: 'int'", eh.errors[0].message)
+        self.assertEqual(eh.errors[0].code, "SEM026")
