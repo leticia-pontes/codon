@@ -9,10 +9,11 @@ from src.utils.erros import ErrorHandler, SemanticError
 
 
 class TestSemanticBasic(unittest.TestCase):
-    # Ajudante corrigido: Inclui return_type e tipa os parâmetros como 'Int'
+    # Ajudante corrigido: Usando is_procedure
     def make_func(self, name, params, return_type, corpo, is_proc=False):
-        params_typed = [(p, 'Int') for p in params]
-        return DeclaracaoFuncao(name, params_typed, return_type, corpo, is_proc)
+        params_typed = [(p, 'int') for p in params]
+        # CORREÇÃO: Usar is_procedure=is_proc
+        return DeclaracaoFuncao(name, params_typed, return_type, corpo, is_procedure=is_proc)
 
     def run_analyzer(self, decls):
         eh = ErrorHandler()
@@ -27,7 +28,7 @@ class TestSemanticBasic(unittest.TestCase):
         func = self.make_func(
             "f",
             ["x"],
-            "Int", # Tipo de retorno
+            "int", # Tipo de retorno corrigido para 'int'
             [
                 InstrucaoRetorno(
                     ExpressaoBinaria(
@@ -48,7 +49,7 @@ class TestSemanticBasic(unittest.TestCase):
         func = self.make_func(
             "g",
             [],
-            "Int", # Tipo de retorno
+            "int", # Tipo de retorno corrigido para 'int'
             [
                 InstrucaoAtribuicao(Variavel("a"), "=", Literal(10)),
                 InstrucaoAtribuicao(
@@ -68,7 +69,7 @@ class TestSemanticBasic(unittest.TestCase):
         func = self.make_func(
             "h",
             [],
-            "Int", # Tipo de retorno
+            "int", # Tipo de retorno corrigido para 'int'
             [InstrucaoRetorno(Literal(42))]
         )
         eh = self.run_analyzer([func])

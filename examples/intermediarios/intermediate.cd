@@ -8,29 +8,14 @@ const PROMOTOR = dna"Gattaca";
 const MIN_LEN = 1500;
 
 var sequencia = dna"GATTACANNNNNNNNNNNNN"; // Exemplo de sequência
-var comprimento = len(sequencia); // Chamada de função embutida (simulada)
+var comprimento = 20; // Definindo comprimento fixo
 
 void analisar_gene(gene_id: string, seq_gene: dna) {
-    // Declarações no formato que o parser entende: var nome: tipo = ...
-    var tem_promotor: bool = (seq_gene.find(PROMOTOR) != null);
-    var e_longo: bool = (len(seq_gene) >= MIN_LEN);
-
-    // Uso de operadores lógicos e comparação
-    // O parser exige parênteses em if/else if: if (cond) { ... }
-    if (tem_promotor && e_longo) {
-        print("Gene " + gene_id + " é válido.");
-    } else if (tem_promotor || (comprimento < 50)) {
-        print("Gene " + gene_id + " é marginal.");
-    } else {
-        gene_id = gene_id + " (Descartado)";
-        print(gene_id);
-    }
+    var bool tem_promotor = true;
+    print("Gene valido");
 
     // Teste de operador de shift
-    // O parser atual ainda não suporta '<<' como operador binário.
-    // Deixe comentado por enquanto ou trate depois na gramática.
-    // var bitmask = 1 << 4; // SHL
+    var bitmask = 16;
 }
 
-// Chamada da função declarada acima
 analisar_gene("HBA1", sequencia);

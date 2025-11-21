@@ -6,10 +6,12 @@ function calcular_cn(amostra: string, valor_ct: float): string {
         return "Nao_Detectado";
     }
     amostra += " Analisada"; // Operador composto
-    var resultado = true;
-    return resultado;
+    var bool resultado = true;
+    return "Resultado";
 }
 
-var x = 1.0e-3; // Notação científica
+var x = 0.001;
 x += 0.001;
+var int y = 10;
+y = "texto";
 á // ERRO LÉXICO: Caractere não reconhecido 'á' na Linha 15, Coluna 1
