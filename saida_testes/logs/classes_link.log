@@ -1,0 +1,12 @@
+STDOUT:
+
+
+STDERR:
+saida_testes\ll\classes.ll:1:1: error: expected top-level entity
+    1 | SYN000: Esperado 'program', mas chegou 'class' (KWD). (Linha: 3, Coluna: 1)
+      | ^
+1 error generated.
+saida_testes\runtime.c:2:10: fatal error: 'stdio.h' file not found
+    2 | #include <stdio.h>
+      |          ^~~~~~~~~
+1 error generated.

@@ -1,0 +1,24 @@
+STDOUT:
+SYN000: Esperado SEMI, mas chegou ':' (COLON). (Linha: 4, Coluna: 14)
+SYN000: Esperado SEMI, mas chegou '}' (RBRACE). (Linha: 5, Coluna: 1)
+
+STDERR:
+Compilando repos\examples\avancados\traducao_genetica.cd...
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\uber\source\repos\codon\src\compilador.py", line 102, in <module>
+    main()
+  File "C:\Users\uber\source\repos\codon\src\compilador.py", line 70, in main
+    ast = parser.parse()
+          ^^^^^^^^^^^^^^
+  File "C:\Users\uber\source\repos\codon\src\parser\descendente\parser_ll1.py", line 27, in parse
+    declarations = self.decl_topo()
+                   ^^^^^^^^^^^^^^^^
+  File "C:\Users\uber\source\repos\codon\src\parser\descendente\parser_ll1.py", line 78, in decl_topo
+    declarations.append(self.decl_classe())
+                        ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\uber\source\repos\codon\src\parser\descendente\parser_ll1.py", line 194, in decl_classe
+    return DeclaracaoClasse(token=tk, nome=nome_tk.lexeme, campos=campos, metodos=[])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: DeclaracaoClasse.__init__() got an unexpected keyword argument 'metodos'

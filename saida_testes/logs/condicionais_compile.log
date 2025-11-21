@@ -1,0 +1,7 @@
+STDOUT:
+SYN000: Esperado RPAREN, mas chegou ':' (COLON). (Linha: 3, Coluna: 27)
+SYN000: Esperado RPAREN, mas chegou '>' (GT). (Linha: 6, Coluna: 16)
+SYN000: Esperado EOF, mas chegou '}' (RBRACE). (Linha: 8, Coluna: 5)
+
+STDERR:
+Compilando repos\examples\basicos\condicionais.cd...

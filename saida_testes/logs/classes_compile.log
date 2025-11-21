@@ -1,0 +1,7 @@
+STDOUT:
+SYN000: Esperado SEMI, mas chegou ':' (COLON). (Linha: 4, Coluna: 9)
+SYN000: Esperado SEMI, mas chegou ':' (COLON). (Linha: 5, Coluna: 12)
+SYN000: Esperado EOF, mas chegou 'function' (KWD). (Linha: 8, Coluna: 1)
+
+STDERR:
+Compilando repos\examples\intermediarios\classes.cd...

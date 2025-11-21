@@ -1,0 +1,4 @@
+saida_testes\ll\hello_world.ll:2:1: error: expected top-level entity
+    2 | Analise Semantica concluida sem erros. [OK]
+      | ^
+1 error generated.

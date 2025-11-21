@@ -1,0 +1,4 @@
+saida_testes\ll\sample_error.ll:1:1: error: expected top-level entity
+    1 | Caractere n�o reconhecido '�' (Linha 15, Coluna 1)
+      | ^
+1 error generated.

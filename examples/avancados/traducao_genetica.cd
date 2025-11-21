@@ -1,0 +1,59 @@
+/" Simulação completa: DNA -> RNA -> Proteína "/
+
+class DNA {
+    sequencia: string;a
+}
+
+class RNA {
+    sequencia: string;
+}
+
+class Proteina {
+    aminoacidos: string;
+}
+
+/" Transcreve DNA em RNA "/
+function transcrever(dna: DNA): RNA {
+    rna = RNA();
+    rna.sequencia = "";
+    for i = 0; i < length(dna.sequencia); i++ {
+        if dna.sequencia[i] == 'A' {
+            rna.sequencia += "U";
+        } elif dna.sequencia[i] == 'T' {
+            rna.sequencia += "A";
+        } elif dna.sequencia[i] == 'C' {
+            rna.sequencia += "G";
+        } elif dna.sequencia[i] == 'G' {
+            rna.sequencia += "C";
+        }
+    }
+    return rna;
+}
+
+/" Traduz RNA em sequência de aminoácidos simplificada "/
+function traduzir(rna: RNA): Proteina {
+    prot = Proteina();
+    prot.aminoacidos = "";
+    for i = 0; i < length(rna.sequencia); i += 3 {
+        codon = substring(rna.sequencia, i, 3);
+        if codon == "AUG" {
+            prot.aminoacidos += "Met";
+        } elif codon == "UUU" {
+            prot.aminoacidos += "Phe";
+        } elif codon == "UAA" {
+            break;
+        }
+    }
+    return prot;
+}
+
+function main(): void {
+    dna = DNA();
+    dna.sequencia = "ATGTTCATA";
+    rna = transcrever(dna);
+    proteina = traduzir(rna);
+
+    print("DNA:", dna.sequencia);
+    print("RNA:", rna.sequencia);
+    print("Proteína:", proteina.aminoacidos);
+}

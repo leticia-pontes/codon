@@ -1,0 +1,27 @@
+/" Define a estrutura de um domínio proteico "/
+class Dominio {
+    sequencia_aa: prot;
+    inicio: int;
+    fim: int;
+}
+
+var Dom = Dominio(prot"MEEPQSDPSVET", 1, 12);
+
+var array_dominios = new Dominio[10];
+
+void processar_dominios(dominio_alvo: Dominio) {
+    var tamanho_total = dominio_alvo.fim - dominio_alvo.inicio;
+    array_dominios[5].sequencia_aa = prot"ACGT";
+
+    for i = 1; i < 10; i = i + 1 {
+        var range_alvo = 5..15;
+        if (i >= range_alvo.inicio) {
+            i = i + 1;
+        }
+    }
+
+    dominio_alvo.inicio = dominio_alvo.inicio + 1;
+    return -(tamanho_total + 1);
+}
+
+processar_dominios(Dom);

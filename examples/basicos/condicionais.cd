@@ -1,0 +1,16 @@
+/" Classificação de pH biológico "/
+
+function classificar_ph(pH: decimal): string {
+    if (pH < 7) {
+        return "ácido";
+    } elif (pH > 7) {
+        return "básico";
+    } else {
+        return "neutro";
+    }
+}
+
+function main(): void {
+    resultado = classificar_ph(6.8);
+    print("A solução é", resultado);
+}
