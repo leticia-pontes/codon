@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+CAMINHO_CODON = Path(".")
+CAMINHO_SAIDA = Path("saida_testes")
+
+def encontrar_clang():
+    possiveis_caminhos = [
+        r"C:\Program Files\LLVM\bin\clang.exe",
+        r"C:\Program Files (x86)\LLVM\bin\clang.exe",
+        r"C:\msys64\mingw64\bin\clang.exe",
+        "clang.exe"
+    ]
+    for caminho in possiveis_caminhos:
+        if os.path.exists(caminho): return caminho
+    try:
+        res = subprocess.run(["where", "clang"], capture_output=True, text=True)
+        if res.returncode == 0: return res.stdout.strip().split('\n')[0]
+    except: pass
+    return None
+
+def criar_runtime_c():
+    # Runtime manual para evitar 'stdio.h not found'
+    runtime_c = """
+#ifdef _WIN32
+  #define EXPORT __declspec(dllexport)
+#else
+  #define EXPORT
+#endif
+
+// Declarações para o Linker
+int printf(const char *format, ...);
+char *strstr(const char *haystack, const char *needle);
+
+long long cd_strlen(const char *str) {
+    long long len = 0;
+    while (str[len]) len++;
+    return len;
+}
+
+long long find_substring(const char *str, const char *pattern) {
+    if (!str || !pattern) return -1;
+    char *found = strstr(str, pattern);
+    return found ? (long long)(found - str) : -1;
+}
+"""
+    with open(CAMINHO_SAIDA / "runtime.c", "w") as f:
+        f.write(runtime_c)
+
+def criar_diretorios():
+    CAMINHO_SAIDA.mkdir(exist_ok=True)
+    (CAMINHO_SAIDA / "ll").mkdir(exist_ok=True)
+    (CAMINHO_SAIDA / "exe").mkdir(exist_ok=True)
+    (CAMINHO_SAIDA / "logs").mkdir(exist_ok=True)
+
+def encontrar_todos_arquivos_cd():
+    print("🔍 Procurando por todos os arquivos .cd...")
+    arquivos = []
+    for arquivo in Path(".").rglob("*.cd"):
+        if "repos/examples" in str(arquivo) or "saida_testes" in str(arquivo): continue
+        arquivos.append(arquivo)
+    print(f"    ✅ Encontrados {len(arquivos)} arquivos únicos.")
+    return sorted(arquivos)
+
+def compilar_para_ll(arquivo_cd: Path):
+    nome_base = arquivo_cd.stem
+    arquivo_ll = CAMINHO_SAIDA / "ll" / f"{nome_base}.ll"
+    arquivo_log = CAMINHO_SAIDA / "logs" / f"{nome_base}_compile.log"
+    print(f"  📝 Compilando {arquivo_cd}...")
+    
+    try:
+        cmd = [sys.executable, "-m", "src.compilador", "run", str(arquivo_cd)]
+        res = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=CAMINHO_CODON)
+        
+        if res.returncode != 0 or "SYN" in res.stdout or "SYN" in res.stderr or "ERRO" in res.stdout:
+            print(f"    ❌ Erro de compilação.")
+            with open(arquivo_log, 'w', encoding='utf-8') as f:
+                f.write(f"STDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+            return None
+        
+        with open(arquivo_ll, 'w', encoding='utf-8') as f:
+            f.write(res.stdout)
+        print(f"    ✅ LLVM IR gerado.")
+        return arquivo_ll
+    except Exception as e:
+        print(f"    ❌ Exceção: {e}")
+        return None
+
+def compilar_para_executavel(arquivo_ll, clang_path):
+    nome_base = arquivo_ll.stem
+    arquivo_exe = CAMINHO_SAIDA / "exe" / f"{nome_base}.exe"
+    criar_runtime_c()
+    try:
+        # Adiciona flags para evitar erros de linker no Windows
+        res = subprocess.run([clang_path, "-O0", "-Wno-override-module", str(arquivo_ll), str(CAMINHO_SAIDA/"runtime.c"), "-o", str(arquivo_exe)], capture_output=True, text=True)
+        if res.returncode != 0:
+            print(f"    ❌ Erro no link (clang).")
+            # Debug do erro do linker
+            with open(CAMINHO_SAIDA / "logs" / f"{nome_base}_link.log", 'w') as f:
+                f.write(res.stderr)
+            return None
+        print(f"    ✅ Executável criado.")
+        return arquivo_exe
+    except: return None
+
+def testar_arquivo(arquivo_cd, clang_path):
+    print(f"\n📁 Testando: {arquivo_cd}")
+    ll = compilar_para_ll(arquivo_cd)
+    if not ll: return False
+    exe = compilar_para_executavel(ll, clang_path)
+    if not exe: return False
+    
+    print(f"  ▶️  Executando...")
+    try:
+        res = subprocess.run([str(exe)], capture_output=True, text=True, timeout=5, encoding='cp1252', errors='replace')
+        print(f"📤 Saída:\n{res.stdout}")
+        if res.stderr: print(f"⚠️ Erro:\n{res.stderr}")
+        return res.returncode == 0
+    except Exception as e:
+        print(f"    ❌ Erro execução: {e}")
+        return False
+
+def main():
+    clang = encontrar_clang()
+    if not clang: return
+    criar_diretorios()
+    arquivos = encontrar_todos_arquivos_cd()
+    resultados = [(f, testar_arquivo(f, clang)) for f in arquivos]
+    
+    sucessos = sum(1 for _, s in resultados if s)
+    print(f"\n📊 Sucesso: {sucessos}/{len(resultados)}")
+
+if __name__ == "__main__":
+    main()

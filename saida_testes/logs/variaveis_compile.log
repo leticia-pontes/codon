@@ -1,0 +1,6 @@
+STDOUT:
+SYN000: Token inesperado: ) (Linha: 3, Coluna: 15)
+SYN000: Esperado ID, mas chegou '{' (LBRACE). (Linha: 3, Coluna: 23)
+
+STDERR:
+Compilando repos\examples\basicos\variaveis.cd...

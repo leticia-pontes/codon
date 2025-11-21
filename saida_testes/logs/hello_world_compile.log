@@ -1,0 +1,5 @@
+STDOUT:
+SYN000: Token inesperado: = (Linha: 4, Coluna: 13)
+
+STDERR:
+Compilando repos\examples\basicos\hello_world.cd...

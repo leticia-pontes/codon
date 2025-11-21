@@ -1,0 +1,6 @@
+STDOUT:
+SYN000: Token inesperado: = (Linha: 3, Coluna: 16)
+SYN000: Esperado ID, mas chegou 'int' (KWD). (Linha: 7, Coluna: 5)
+
+STDERR:
+Compilando repos\examples\basicos\basic.cd...
