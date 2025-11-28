@@ -1,0 +1,13 @@
+/" Teste de operador potência ^ "/
+
+var base = 2;
+var exp = 3;
+var resultado = base ^ exp;
+
+print(resultado);  // Deve imprimir 8
+
+var quadrado = 5 ^ 2;
+print(quadrado);  // Deve imprimir 25
+
+var cubo = 3 ^ 3;
+print(cubo);  // Deve imprimir 27

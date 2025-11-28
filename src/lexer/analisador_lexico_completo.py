@@ -1,14 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, Deque, Union
+from typing import Optional, List, Tuple, Deque
 from collections import deque
 import re
-import sys
 
 from src.utils.erros import ErrorHandler, LexicalError
 
-# ---------------
-# Constantes (Regras e Palavras-chave)
-# ---------------
+# --------------- Regras e palavras-chave ---------------
 
 REGRAS = [
     (r'/"[\s\S]*?"/', None),
@@ -27,6 +24,8 @@ REGRAS = [
     (r'>>', 'SHR'),
     (r'\+=', 'PLUS_EQ'),
     (r'-=', 'MINUS_EQ'),
+    (r'\+\+', 'PLUS_PLUS'),
+    (r'--', 'MINUS_MINUS'),
     (r'\*=', 'STAR_EQ'),
     (r'/=', 'SLASH_EQ'),
     (r'%=', 'PERC_EQ'),
@@ -108,13 +107,6 @@ class Token:
         return hash((self.tipo, self.valor, self.linha, self.coluna))
 
 
-class LexicalError(Exception):
-    def __init__(self, msg: str, linha: int, coluna: int):
-        super().__init__(f"{msg} (Linha {linha}, Coluna {coluna})")
-        self.linha = linha
-        self.coluna = coluna
-
-
 class Lexer:
     def __init__(self, source: str, error_handler=None):
         self.source = source
@@ -126,10 +118,14 @@ class Lexer:
         self.error_handler = error_handler or ErrorHandler()
 
     def _update_line_col(self, text: str):
+        if not text:
+            return
         last_newline = text.rfind('\n')
         if last_newline != -1:
+            # atualiza linhas e coloca coluna como número de chars após a última newline
             self.linha += text.count('\n')
-            self.coluna = (len(text) - last_newline - 1) + 1
+            # posição dentro da última linha (1-based)
+            self.coluna = len(text) - last_newline - 1
         else:
             self.coluna += len(text)
 
@@ -137,60 +133,66 @@ class Lexer:
         best = None
         for idx, (regex, t_tipo) in enumerate(_compiled_rules):
             m = regex.match(self.source, pos)
-            if not m: continue
+            if not m:
+                continue
             length = m.end() - m.start()
-            if length == 0: continue
-            if best is None or length > (best[0].end()-best[0].start()) or (length == (best[0].end()-best[0].start()) and idx < best[2]):
+            if length == 0:
+                continue
+            if best is None or length > (best[0].end() - best[0].start()) or (
+                length == (best[0].end() - best[0].start()) and idx < best[2]
+            ):
                 best = (m, t_tipo, idx)
         return best
 
     def _next_token_internal(self) -> Optional[Token]:
-        if self.pos >= self.length:
-            return None
+        # loop para pular caracteres inválidos sem encerrar a tokenização
+        while self.pos < self.length:
+            start_pos_current = self.pos
+            start_line_current = self.linha
+            start_col_current = self.coluna
 
-        start_pos_current = self.pos
-        start_line_current = self.linha
-        start_col_current = self.coluna
+            res = self._longest_match_at(start_pos_current)
+            if res is None:
+                bad_char = self.source[self.pos]
+                self.pos += 1
+                self._update_line_col(bad_char)
 
-        res = self._longest_match_at(start_pos_current)
-        if res is None:
-            bad_char = self.source[self.pos]
-            self.pos += 1
-            self._update_line_col(bad_char)
+                err = LexicalError(f"Caractere não reconhecido '{bad_char}'", start_line_current, start_col_current)
+                self.error_handler.report_error(err)
 
-            # Ao invés de levantar exceção, registramos o erro
-            err = LexicalError(f"Caractere não reconhecido '{bad_char}'",
-                            start_line_current, start_col_current)
-            self.error_handler.report_error(err)
+                # continuar o laço para tentar o próximo caractere/token
+                continue
 
-            # Retorna None ou cria um token especial de erro
-            return None
+            m, token_tipo, rule_idx = res
+            valor = m.group(0)
+            end_pos = m.end()
+            self.pos = end_pos
+            self._update_line_col(valor)
 
-        m, token_tipo, rule_idx = res
-        valor = m.group(0)
-        end_pos = m.end()
-        self.pos = end_pos
-        self._update_line_col(valor)
+            if token_tipo is None:
+                # token descartável (comentário / whitespace) - continuar
+                continue
 
-        if token_tipo is None:
-            return self._next_token_internal()
+            if token_tipo == 'ID' and valor in PALAVRAS_CHAVE:
+                token_tipo = PALAVRAS_CHAVE[valor]
 
-        if token_tipo == 'ID' and valor in PALAVRAS_CHAVE:
-            token_tipo = PALAVRAS_CHAVE[valor]
+            return Token(token_tipo, valor, start_line_current, start_col_current, start_pos_current, end_pos)
 
-        return Token(token_tipo, valor, start_line_current,
-                    start_col_current, start_pos_current, end_pos)
+        # EOF
+        return None
 
     def next(self) -> Optional[Token]:
-        if self._buf: return self._buf.popleft()
+        if self._buf:
+            return self._buf.popleft()
         return self._next_token_internal()
 
     def peek(self, n: int = 1) -> Optional[Token]:
         while len(self._buf) < n:
             t = self._next_token_internal()
-            if t is None: break
+            if t is None:
+                break
             self._buf.append(t)
-        return self._buf[n-1] if len(self._buf) >= n else None
+        return self._buf[n - 1] if len(self._buf) >= n else None
 
     def push_back(self, token: Token):
         self._buf.appendleft(token)
@@ -199,7 +201,8 @@ class Lexer:
         toks = []
         while True:
             t = self.next()
-            if t is None: break
+            if t is None:
+                break
             toks.append(t)
         return toks
 
@@ -212,15 +215,17 @@ class TokenStream:
     def _fill(self, n: int):
         while len(self.buffer) < n:
             t = self.lexer.next()
-            if t is None: break
+            if t is None:
+                break
             self.buffer.append(t)
 
     def peek(self, n: int = 1) -> Optional[Token]:
         self._fill(n)
-        return self.buffer[n-1] if len(self.buffer) >= n else None
+        return self.buffer[n - 1] if len(self.buffer) >= n else None
 
     def next(self) -> Optional[Token]:
-        if self.buffer: return self.buffer.popleft()
+        if self.buffer:
+            return self.buffer.popleft()
         return self.lexer.next()
 
     def accept(self, tipo: str) -> Optional[Token]:
@@ -231,13 +236,16 @@ class TokenStream:
 
     def expect(self, tipo: str) -> Token:
         t = self.next()
-        if t is None: raise SyntaxError(f"Esperado token {tipo}, mas chegou EOF")
-        if t.tipo != tipo: raise SyntaxError(f"Esperado token {tipo}, mas chegou {t.tipo} em Ln{t.linha} Col{t.coluna}")
+        if t is None:
+            raise SyntaxError(f"Esperado token {tipo}, mas chegou EOF")
+        if t.tipo != tipo:
+            raise SyntaxError(f"Esperado token {tipo}, mas chegou {t.tipo} em Ln{t.linha} Col{t.coluna}")
         return t
 
     def match(self, *tipos: str) -> Optional[Token]:
         t = self.peek(1)
-        if t and t.tipo in tipos: return self.next()
+        if t and t.tipo in tipos:
+            return self.next()
         return None
 
     def push_back(self, token: Token):

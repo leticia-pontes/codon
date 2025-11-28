@@ -12,5 +12,5 @@ function classificar_ph(pH: decimal): string {
 
 function main(): void {
     resultado = classificar_ph(6.8);
-    print("A solução é", resultado);
+    print("A solução é ", resultado);
 }

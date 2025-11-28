@@ -17,6 +17,7 @@ void inicializar_placa(num_amostras: int) {
     // Loop simples (uso de KWD 'while', Operador de comparação)
     while (i < num_amostras) {
         volume_mastermix[i] = 20; // 20µL por poço
+        print(i);
         i += 1; // Operador composto
     }
 }

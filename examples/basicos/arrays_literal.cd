@@ -1,0 +1,9 @@
+"/ Teste de arrays literais "/
+
+function main(): void {
+    var int[] arr = [1, 2, 3, 5];
+    print("arr[0] =", arr[0]);
+    print("arr[1] =", arr[1]);
+    print("arr[2] =", arr[2]);
+    print("arr[3] =", arr[3]);
+}

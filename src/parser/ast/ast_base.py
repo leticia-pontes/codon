@@ -27,10 +27,10 @@ class Programa(ASTNode):
 @dataclass
 class DeclaracaoFuncao(ASTNode):
     nome: str
-    parametros: List[Tuple[str, str]] # Parâmetros agora são (nome, tipo)
-    tipo_retorno: str # Novo campo
-    corpo: List[ASTNode]
-    is_procedure: bool = False
+    parametros: list
+    corpo: list
+    is_procedure: bool
+    tipo_retorno: str | None = None
 
 @dataclass
 class DeclaracaoClasse(ASTNode):
@@ -67,6 +67,8 @@ class ExpressaoBinaria(ASTNode):
     esquerda: ASTNode
     operador: str
     direita: ASTNode
+    line: int
+    col: int
 
 @dataclass
 class ExpressaoUnaria(ASTNode):
@@ -78,6 +80,10 @@ class Literal(ASTNode):
     valor: Union[str, float, int, bool, None] # Adicionado bool e None (null)
 
 @dataclass
+class Numero(Literal):
+    pass
+
+@dataclass
 class LiteralRange(ASTNode):
     inicio: ASTNode
     fim: ASTNode
@@ -85,6 +91,11 @@ class LiteralRange(ASTNode):
 @dataclass
 class Variavel(ASTNode):
     nome: str
+
+@dataclass
+class DeclaracaoVariavel(ASTNode):
+    nome: str
+    tipo: str
 
 @dataclass
 class ChamadaFuncao(ASTNode):
@@ -106,13 +117,25 @@ class InstrucaoRetorno(ASTNode):
     expressao: Optional[ASTNode]
 
 @dataclass
+class InstrucaoBreak(ASTNode):
+    pass
+
+@dataclass
+class InstrucaoContinue(ASTNode):
+    pass
+
+@dataclass
 class InstrucaoImpressao(ASTNode):
-    expressao: ASTNode
+    expressoes: List[ASTNode]
 
 @dataclass
 class CriacaoArray(ASTNode):
     tipo: str
     tamanho: ASTNode
+
+@dataclass
+class LiteralArray(ASTNode):
+    elementos: List[ASTNode]
 
 @dataclass
 class CriacaoClasse(ASTNode):
@@ -181,8 +204,8 @@ class Parser:
             tipo_retorno = self._tipo().valor
 
         corpo = self._bloco()
-        # Passa o tipo de retorno para a AST
-        return DeclaracaoFuncao(nome_token.valor, parametros, tipo_retorno, corpo, is_procedure)
+        # Ordena argumentos conforme dataclass: nome, parametros, corpo, is_procedure, tipo_retorno
+        return DeclaracaoFuncao(nome_token.valor, parametros, corpo, is_procedure, tipo_retorno)
 
     def _decl_classe(self) -> DeclaracaoClasse:
         self.ts.expect("KWD")
@@ -251,6 +274,14 @@ class Parser:
                 return self._instrucao_while()
             elif t.valor == 'return':
                 return self._instrucao_return()
+            elif t.valor == 'break':
+                self.ts.next()
+                self.ts.expect("SEMI")
+                return InstrucaoBreak()
+            elif t.valor == 'continue':
+                self.ts.next()
+                self.ts.expect("SEMI")
+                return InstrucaoContinue()
             elif t.valor == 'print':
                 return self._instrucao_print()
             elif t.valor in ('var', 'const'):
@@ -261,30 +292,42 @@ class Parser:
 
     def _decl_var_const(self) -> Optional[ASTNode]:
         kw = self.ts.expect("KWD")  # 'var' ou 'const'
-        # Tenta detectar formato tipado: Tipo (ID/KWD) [ [] ] ... Ident
         var_name_token = None
+
         t1 = self.ts.peek()
         t2 = self.ts.peek(2)
+
+        # detecção de tipo opcional (ex: var int x;)
         if t1 and (t1.tipo in ("KWD","ID")) and t2 and (t2.tipo in ("ID","LBRACK")):
             self.ts.next()  # consome tipo
-            # consome pares [] opcionais (ex: int[])
             while self.ts.match("LBRACK"):
                 self.ts.expect("RBRACK")
             var_name_token = self.ts.expect("ID")
         else:
             var_name_token = self.ts.expect("ID")
+
         # Atribuição opcional
         if self.ts.match("ASSIGN"):
             valor = self._expressao()
             self.ts.expect("SEMI")
             return InstrucaoAtribuicao(Variavel(var_name_token.valor), '=', valor)
+
         else:
+            # declaração sem inicialização
             self.ts.expect("SEMI")
-            return None
+            return DeclaracaoVariavel(var_name_token.valor, None)
 
     def _instrucao_atribuicao_ou_chamada(self) -> ASTNode:
         # Usa _exp_primaria_ou_acesso para capturar ID, ID(), ID.campo, ID[indice]
         alvo = self._exp_primaria_ou_acesso()
+
+        # Verifica operadores pós-fixados (++ e --)
+        post_op = self.ts.match("PLUS_PLUS", "MINUS_MINUS")
+        if post_op:
+            # Transforma em expressão unária pós-fixada
+            expr_unaria = ExpressaoUnaria(post_op.valor, alvo)
+            self.ts.expect("SEMI")
+            return expr_unaria
 
         atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ","MINUS_EQ")
 
@@ -351,8 +394,12 @@ class Parser:
         self.ts.expect("KWD")  # 'for'
         has_parens = self.ts.match("LPAREN") is not None
 
-        # Inicialização (consome ';' internamente)
-        inicializacao = self._instrucao_atribuicao_ou_chamada()
+        # Inicialização: pode ser declaração ou atribuição
+        t = self.ts.peek()
+        if t and t.tipo == 'KWD' and t.valor in ('var', 'const'):
+            inicializacao = self._decl_var_const()
+        else:
+            inicializacao = self._instrucao_atribuicao_ou_chamada()
 
         condicao = self._expressao()
         self.ts.expect("SEMI")
@@ -389,53 +436,68 @@ class Parser:
         # ... (Método _instrucao_print permanece o mesmo) ...
         self.ts.expect("KWD")
         self.ts.expect("LPAREN")
-        expr = self._expressao() # Usa _expressao para suportar qualquer tipo de expressão
-        # Consome argumentos extras separados por vírgula, ignorando-os na AST simplificada
-        while self.ts.match("COMMA"):
-            _ = self._expressao()
-        self.ts.expect("RPAREN")
+        exp_list: List[ASTNode] = []
+        # Pelo menos um argumento (ou fecha direto se vazio)
+        if not self.ts.match("RPAREN"):
+            exp_list.append(self._expressao())
+            while self.ts.match("COMMA"):
+                exp_list.append(self._expressao())
+            self.ts.expect("RPAREN")
         self.ts.expect("SEMI")
-        return InstrucaoImpressao(expr)
+        return InstrucaoImpressao(exp_list)
 
     # ==========================================
     # --- Expressões ---
     # ==========================================
     def _exp_primaria_ou_acesso(self) -> ASTNode:
-        # ... (Método _exp_primaria_ou_acesso permanece o mesmo, é o loop de pós-fixado) ...
+        # Primeiro, parse da expressão primária
         node = self._exp_primaria()
 
+        # Loop para operadores pós-fixados (., (), [])
         while True:
-            peek = self.ts.peek()
-            if not peek: break
+            tok = self.ts.peek()
+            if not tok:
+                break
 
-            # Chamada de função: sempre é `ID(...)` ou `ID.campo(...)`
-            if peek.tipo == 'LPAREN':
-                self.ts.next()
+            if tok.tipo == "LPAREN":
+                self.ts.next()  # consume '('
+
                 argumentos = []
-                while self.ts.peek() and self.ts.peek().tipo != 'RPAREN':
-                    arg = self._expressao()
-                    argumentos.append(arg)
-                    if self.ts.peek() and self.ts.peek().tipo == "COMMA":
-                        self.ts.next()
-                self.ts.expect("RPAREN")
-                node = ChamadaFuncao(node, argumentos)
-                continue # Continua o loop para encadear mais acessos
+                # argumentos opcionais
+                if self.ts.peek() and self.ts.peek().tipo != "RPAREN":
+                    argumentos.append(self._expressao())
+                    while self.ts.match("COMMA"):
+                        argumentos.append(self._expressao())
 
-            # Acesso a campo (objeto.campo)
-            elif self.ts.match("DOT"):
-                campo_token = self.ts.expect("ID")
-                node = AcessoCampo(node, campo_token.valor)
+                self.ts.expect("RPAREN")
+
+                # Neste ponto, node pode ser:
+                # - Variavel("f")
+                # - AcessoCampo(...)
+                # - AcessoArray(...)
+                # - Call encadeado
+                #
+                # Não fazemos caso especial para Variavel.
+                # `node` vira o callee real.
+                node = ChamadaFuncao(node, argumentos)
                 continue
 
-            # Acesso a índice (array[indice])
-            elif self.ts.match("LBRACK"):
+            if tok.tipo == "DOT":
+                self.ts.next()  # consume '.'
+                campo = self.ts.expect("ID")
+                node = AcessoCampo(node, campo.valor)
+                continue
+
+            if tok.tipo == "LBRACK":
+                self.ts.next()  # consume '['
                 indice = self._expressao()
                 self.ts.expect("RBRACK")
                 node = AcessoArray(node, indice)
                 continue
 
-            else:
-                break
+            # Nenhum operador pós-fixado adicional
+            break
+
         return node
 
     def _exp_primaria(self):
@@ -445,6 +507,17 @@ class Parser:
             return Literal(None)
 
         try:
+            # Array literal: [expr, expr, ...]
+            if t.tipo == 'LBRACK':
+                self.ts.next()
+                elementos: List[ASTNode] = []
+                if not self.ts.match('RBRACK'):
+                    elementos.append(self._expressao())
+                    while self.ts.match('COMMA'):
+                        elementos.append(self._expressao())
+                    self.ts.expect('RBRACK')
+                return LiteralArray(elementos)
+
             # Literais Simples
             if t.tipo in ("DEC_INT","FLOAT","STRING","CHAR_LIT","DNA_LIT","RNA_LIT","PROT_LIT"):
                 self.ts.next()
@@ -531,18 +604,22 @@ class Parser:
 
     def _exp_logica_or(self):
         node = self._exp_logica_and()
-        while self.ts.match("OR_OR"):
-            op = self.ts.next().valor # consome '||'
+        while True:
+            op = self.ts.match("OR_OR")
+            if not op:
+                break
             direita = self._exp_logica_and()
-            node = ExpressaoBinaria(node, op, direita)
+            node = ExpressaoBinaria(node, op.valor, direita)
         return node
 
     def _exp_logica_and(self):
         node = self._exp_relacional()
-        while self.ts.match("AND_AND"):
-            op = self.ts.next().valor # consome '&&'
+        while True:
+            op = self.ts.match("AND_AND")
+            if not op:
+                break
             direita = self._exp_relacional()
-            node = ExpressaoBinaria(node, op, direita)
+            node = ExpressaoBinaria(node, op.valor, direita)
         return node
 
     def _exp_relacional(self):
@@ -574,9 +651,10 @@ class Parser:
 
     def _exp_potencia(self):
         node = self._exp_unaria()
-        if self.ts.match("CARET"):
+        op = self.ts.match("CARET")
+        if op:
             direita = self._exp_potencia()
-            node = ExpressaoBinaria(node,"^",direita)
+            return ExpressaoBinaria(node, "^", direita)
         return node
 
     def _exp_unaria(self):
@@ -584,4 +662,13 @@ class Parser:
         if op:
             direita = self._exp_unaria()
             return ExpressaoUnaria(op.valor,direita)
-        return self._exp_primaria_ou_acesso()
+        # Expressão primária com pós-fixos (++, --, chamadas, acesso)
+        node = self._exp_primaria_ou_acesso()
+        
+        # Operadores pós-fixados ++ e --
+        post_op = self.ts.match("PLUS_PLUS", "MINUS_MINUS")
+        if post_op:
+            # Retorna ExpressaoUnaria com flag de pós-fixo
+            return ExpressaoUnaria(post_op.valor, node)
+        
+        return node

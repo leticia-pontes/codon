@@ -1,0 +1,28 @@
+/" Teste de operadores lógicos && e || "/
+
+var x = 5;
+var y = 10;
+
+// Teste AND (&&)
+if (x > 0 && y > 0) {
+    print(1);  // Deve imprimir 1
+}
+
+if (x > 10 && y > 0) {
+    print(99);  // Não deve imprimir
+}
+
+// Teste OR (||)
+if (x > 10 || y > 5) {
+    print(2);  // Deve imprimir 2
+}
+
+if (x > 10 || y < 5) {
+    print(99);  // Não deve imprimir
+}
+
+// Teste de short-circuit
+var a = 0;
+if (a == 0 || a == 1) {
+    print(3);  // Deve imprimir 3 (não avalia segundo operando)
+}

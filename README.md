@@ -3,7 +3,7 @@
 [![CI](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml/badge.svg)](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml)
 
 > **Nome provisório:** Codon
-> 
+>
 > **Objetivo:** Linguagem educativa para processamento e análise de dados biológicos (DNA, RNA, proteínas), com builtins científicos prontos e sintaxe simples para estudantes e pesquisadores.
 
 ---
@@ -11,13 +11,15 @@
 ## Sumário
 
 * [Visão Geral](#visão-geral)
-	* [Fluxo do Compilador](#fluxo-do-compilador)
+
+  * [Fluxo do Compilador](#fluxo-do-compilador)
 * [Léxico / Tokens](#léxico--tokens)
-* [Sintaxe / Gramática (essencial)](#sintaxe--gramática-essencial)
+* [Sintaxe / Gramática (implementada)](#sintaxe--gramática-implementada)
 * [Ambiente / Env e Interpreter](#ambiente--env-e-interpreter)
 * [Biblioteca Biológica Embutida](#biblioteca-biológica-embutida)
 * [Exemplos](#exemplos)
 * [Instalação e Uso](#instalação-e-uso)
+
   * [Linux / macOS (bash)](#linux--macos-bash)
   * [Windows (PowerShell)](#windows-powershell)
 * [Executar Testes (localmente)](#executar-testes-localmente)
@@ -64,48 +66,47 @@ A lista termina sempre com `EOF`.
 
 ---
 
-## Sintaxe (trecho essencial - EBNF)
+## Sintaxe / Gramática (implementada)
+
+Abaixo está a gramática **exatamente como implementada no parser atual**, incluindo suporte a funções, chamadas, blocos, declarações e expressões completas.
 
 ```ebnf
-declaration := varDecl | statement
+declaration   := funDecl | varDecl | statement
 
-	varDecl := 'let' IDENT '=' expression ';'
+funDecl       := 'function' IDENT '(' parameters? ')' block
+parameters    := IDENT ( ',' IDENT )*
 
-	statement := printStmt | ifStmt | whileStmt | exprStmt | block
+varDecl       := 'let' IDENT ( '=' expression )? ';'
 
-		printStmt := 'print' expression ';'
+statement     := exprStmt | printStmt | ifStmt | whileStmt | forStmt | returnStmt | block
 
-		ifStmt := 'if' '(' expression ')' statement [ 'else' statement ]
+exprStmt      := expression ';'
+printStmt     := 'print' expression ';'
+returnStmt    := 'return' expression? ';'
 
-		whileStmt := 'while' '(' expression ')' statement
+ifStmt        := 'if' '(' expression ')' statement ( 'else' statement )?
+whileStmt     := 'while' '(' expression ')' statement
+forStmt       := 'for' IDENT '=' expression ';' expression ';' expression block
 
-		exprStmt := expression ';'
+block         := '{' declaration* '}'
 
-		block := '{' { declaration } '}'
+expression    := assignment
+assignment    := IDENT '=' assignment | logic_or
 
-expression := assignment
+logic_or      := logic_and ( '||' logic_and )*
+logic_and     := equality ( '&&' equality )*
 
-	assignment := IDENT '=' assignment | logic_or
+equality      := comparison ( ( '==' | '!=' ) comparison )*
+comparison    := term ( ( '>' | '>=' | '<' | '<=' ) term )*
+term          := factor ( ( '+' | '-' ) factor )*
+factor        := unary  ( ( '*' | '/' | '%' ) unary )*
 
-		logic_or := logic_and { '||' logic_and }
+unary         := ( '!' | '-' ) unary | call
 
-		logic_and := equality { '&&' equality }
+call          := primary ( '(' arguments? ')' )*
+arguments     := expression ( ',' expression )*
 
-		equality := comparison { ( '==' | '!=' ) comparison }
-
-		comparison := term { ( '>' | '>=' | '<' | '<=' ) term }
-
-		term := factor { ( '+' | '-' ) factor }
-
-		factor := unary { ( '*' | '/' | '%' ) unary }
-
-		unary := ( '!' | '-' ) unary | call
-
-		call := primary { '(' [ arguments ] ')' }
-
-		arguments := expression { ',' expression }
-
-primary := NUMBER | STRING | 'true' | 'false' | IDENT | '(' expression ')'
+primary       := NUMBER | STRING | 'true' | 'false' | IDENT | '(' expression ')'
 ```
 
 ---
@@ -139,16 +140,19 @@ Funções nativas que operam em strings/números e realizam **normalização int
   * `dna_transcribe(seq) -> string`
   * `dna_back_transcribe(seq) -> string`
   * `dna_translate(seq) -> string`
+
 * Sequência:
 
   * `seq_hamming(a, b) -> int`
   * `seq_kmer_count(seq, k) -> dict`
   * `seq_motif_find(seq, motif) -> [int]`
+
 * Modelos matemáticos:
 
   * `mm_rate(vmax, s, km) -> float`
   * `hill(x, k, n) -> float`
   * `logistic(t, K, r, N0) -> float`
+
 * Operadores booleanos biológicos:
 
   * `bio_and(a,b)`, `bio_or(a,b)`, `bio_not(a)`
@@ -192,17 +196,13 @@ print(transcrever(s))
 git clone https://github.com/leticia-pontes/codon.git
 cd codon
 
-# criar e ativar virtualenv
 python3 -m venv .venv
 source .venv/bin/activate
 
-# instalar dependências
 pip install -r requirements.txt || true
 
-# rodar programa
 PYTHONPATH=./ python -m src.compilador run examples/basicos/hello_world.cd
 
-# rodar testes
 ./scripts/run_all_tests.sh
 ```
 
@@ -217,11 +217,9 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# rodar programa
 $env:PYTHONPATH = "$PWD;$env:PYTHONPATH"
 python -m src.compilador run examples\basicos\hello_world.cd
 
-# rodar testes
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\scripts\run_all_tests.ps1
 ```
@@ -233,10 +231,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 ### Bash (Linux/macOS)
 
 ```bash
-# se virtualenv ativo
 python -m unittest discover -s test -p "*.py" -v
-
-# ou usar script
 ./scripts/run_all_tests.sh
 ```
 
@@ -246,7 +241,6 @@ python -m unittest discover -s test -p "*.py" -v
 .\.venv\Scripts\Activate.ps1
 python -m unittest discover -s test -p "*.py" -v
 
-# ou usar script
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\scripts\run_all_tests.ps1
 ```
@@ -255,8 +249,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 
 ## CI - GitHub Actions
 
-O workflow roda testes automaticamente em **push** e **pull_request** na branch `main` (Ubuntu + Windows).
-Veja `.github/workflows/ci.yml`.
+O workflow roda testes automaticamente em push/pull_request na branch `main`.
 
 ---
 
@@ -264,19 +257,19 @@ Veja `.github/workflows/ci.yml`.
 
 ```
 codon/
-├── docs/                 # Documentações em Markdown
-├── examples/             # Exemplos de programas Codon (`.cd`)
+├── docs/
+├── examples/
 │   ├── avancados/
 │   ├── basicos/
 │   ├── intermediarios/
-├── scripts/              # Scripts para rodar todos os testes (Linux e Windows)
+├── scripts/
 ├── src/
 │   ├── codegen/
 │   ├── lexer/
 │   ├── parser/
 │   ├── semantic/
 │   ├── utils/
-│   └── compilador.py     # entrypoint
+│   └── compilador.py
 ├── test/
 │   ├── lexer_test/
 │   └── parser_test/
@@ -288,8 +281,8 @@ codon/
 
 ## Como Contribuir
 
-1. Fork → branch com seu recurso/bugfix → PR targeting `main`.
-2. Escreva testes cobrindo seu código.
-3. Mantenha estilo do projeto e atualize `docs/` quando necessário.
+1. Fork → branch → PR.
+2. Inclua testes.
+3. Atualize `docs/` quando necessário.
 
-> Atualmente, contribuições são restritas aos membros do grupo.
+> Contribuições restritas ao grupo no momento.

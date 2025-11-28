@@ -8,5 +8,5 @@ function main(): void {
     mol = 0.02;
     volume = 0.5;
     C = concentracao(mol, volume);
-    print("Concentração:", C, "mol/L");
+    print("Concentração: ", C, " mol/L");
 }
