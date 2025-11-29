@@ -57,6 +57,10 @@ class InstrucaoLoopWhile(ASTNode):
     corpo: List[ASTNode]
 
 @dataclass
+class InstrucaoLoopInfinito(ASTNode):
+    corpo: List[ASTNode]
+
+@dataclass
 class InstrucaoAtribuicao(ASTNode):
     alvo: ASTNode
     operador: str
@@ -272,6 +276,8 @@ class Parser:
                 return self._instrucao_for()
             elif t.valor == 'while':
                 return self._instrucao_while()
+            elif t.valor == 'loop':
+                return self._instrucao_loop_infinito()
             elif t.valor == 'return':
                 return self._instrucao_return()
             elif t.valor == 'break':
@@ -388,6 +394,11 @@ class Parser:
         self.ts.expect("RPAREN")
         corpo = self._bloco()
         return InstrucaoLoopWhile(condicao, corpo)
+
+    def _instrucao_loop_infinito(self):
+        self.ts.expect("KWD")  # 'loop'
+        corpo = self._bloco()
+        return InstrucaoLoopInfinito(corpo)
 
     def _instrucao_for(self) -> InstrucaoLoopFor:
         # Suporta variantes com e sem parênteses
@@ -623,9 +634,18 @@ class Parser:
         return node
 
     def _exp_relacional(self):
-        node = self._exp_aditiva()
+        node = self._exp_bitshift()
         while True:
             op = self.ts.match("EQ","NE","LT","GT","LE","GE")
+            if not op: break
+            direita = self._exp_bitshift()
+            node = ExpressaoBinaria(node,op.valor,direita)
+        return node
+
+    def _exp_bitshift(self):
+        node = self._exp_aditiva()
+        while True:
+            op = self.ts.match("SHL","SHR")
             if not op: break
             direita = self._exp_aditiva()
             node = ExpressaoBinaria(node,op.valor,direita)
@@ -634,7 +654,7 @@ class Parser:
     def _exp_aditiva(self):
         node = self._exp_multiplicativa()
         while True:
-            op = self.ts.match("PLUS","MINUS")
+            op = self.ts.match("PLUS","MINUS","BAR","CARET")
             if not op: break
             direita = self._exp_multiplicativa()
             node = ExpressaoBinaria(node,op.valor,direita)
@@ -643,7 +663,7 @@ class Parser:
     def _exp_multiplicativa(self):
         node = self._exp_potencia()
         while True:
-            op = self.ts.match("STAR","SLASH","PERCENT")
+            op = self.ts.match("STAR","SLASH","PERCENT","AMP")
             if not op: break
             direita = self._exp_potencia()
             node = ExpressaoBinaria(node,op.valor,direita)
@@ -651,10 +671,10 @@ class Parser:
 
     def _exp_potencia(self):
         node = self._exp_unaria()
-        op = self.ts.match("CARET")
+        op = self.ts.match("POW")
         if op:
             direita = self._exp_potencia()
-            return ExpressaoBinaria(node, "^", direita)
+            return ExpressaoBinaria(node, "**", direita)
         return node
 
     def _exp_unaria(self):

@@ -26,9 +26,13 @@ REGRAS = [
     (r'-=', 'MINUS_EQ'),
     (r'\+\+', 'PLUS_PLUS'),
     (r'--', 'MINUS_MINUS'),
+    (r'\*\*', 'POW'),
     (r'\*=', 'STAR_EQ'),
     (r'/=', 'SLASH_EQ'),
     (r'%=', 'PERC_EQ'),
+    (r'&=', 'AMP_EQ'),
+    (r'\|=', 'BAR_EQ'),
+    (r'\^=', 'CARET_EQ'),
     (r'==', 'EQ'),
     (r'!=', 'NE'),
     (r'<=', 'LE'),
@@ -77,7 +81,7 @@ REGRAS = [
 
 PALAVRAS_CHAVE = {
     "and": "KWD", "or": "KWD", "not": "KWD",
-    "if": "KWD", "elif": "KWD", "else": "KWD", "while": "KWD", "for": "KWD",
+    "if": "KWD", "elif": "KWD", "else": "KWD", "while": "KWD", "for": "KWD", "loop": "KWD",
     "switch": "KWD", "case": "KWD", "return": "KWD", "break": "KWD",
     "continue": "KWD", "function": "KWD", "procedure": "KWD", "var": "KWD",
     "const": "KWD", "import": "KWD", "from": "KWD", "as": "KWD", "struct": "KWD",

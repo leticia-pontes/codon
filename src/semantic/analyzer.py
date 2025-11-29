@@ -36,14 +36,18 @@ def _get_binary_result_type(op: str, left_type: str, right_type: str) -> Optiona
             if 'float' in {left_type, right_type}:
                 return 'float'
             return 'int'
-        if op == '+' and left_type == 'string' and right_type == 'string':
-            return 'string'
+        # Concatenação de strings e tipos biológicos
+        biological = {'dna','rna','prot'}
+        if op == '+' and left_type == right_type and (left_type == 'string' or left_type in biological):
+            return left_type
         return None
 
     if op in comparison_ops:
         numeric = {'int', 'float', 'decimal'}
+        biological = {'dna','rna','prot'}
         if (left_type in numeric and right_type in numeric) or \
-           (left_type == right_type == 'string'):
+           (left_type == right_type == 'string') or \
+           (left_type == right_type and left_type in biological):
             return 'bool'
         return None
 

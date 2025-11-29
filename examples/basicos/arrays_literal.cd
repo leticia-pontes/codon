@@ -1,4 +1,4 @@
-"/ Teste de arrays literais "/
+// Teste de arrays literais
 
 function main(): void {
     var int[] arr = [1, 2, 3, 5];
