@@ -1,0 +1,34 @@
+// Teste de operadores compostos completos
+function main(): int {
+    print("=== Teste: Operadores Compostos ===");
+    
+    var int x;
+    x = 10;
+    
+    print("Valor inicial:");
+    print(x);
+    
+    x += 5;
+    print("Apos x += 5:");
+    print(x);
+    
+    x -= 3;
+    print("Apos x -= 3:");
+    print(x);
+    
+    x *= 2;
+    print("Apos x *= 2:");
+    print(x);
+    
+    x /= 4;
+    print("Apos x /= 4:");
+    print(x);
+    
+    x = 17;
+    x %= 5;
+    print("Apos 17 %= 5:");
+    print(x);
+    
+    print("Teste concluido!");
+    return 0;
+}

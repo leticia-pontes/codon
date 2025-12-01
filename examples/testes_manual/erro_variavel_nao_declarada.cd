@@ -1,0 +1,5 @@
+// Teste de Erro 1: Variavel nao declarada
+function main(): int {
+    print(x);
+    return 0;
+}

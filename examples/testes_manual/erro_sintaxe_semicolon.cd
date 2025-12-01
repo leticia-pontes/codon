@@ -1,0 +1,6 @@
+// Teste de Erro 4: Falta ponto e virgula
+function main(): int {
+    var int x
+    x = 10;
+    return 0;
+}

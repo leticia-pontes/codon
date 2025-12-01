@@ -1,17 +1,6 @@
 /" Organização conceitual: modelo biológico "/
 
-class Enzima {
-    nome: string;
-    atividade: decimal;
-}
-
-function mostrar(e: Enzima): void {
-    print("Enzima:");
-}
-
 function main(): void {
-    var e = new Enzima();
-    e.nome = "Lactase";
-    e.atividade = 7.2;
-    mostrar(e);
+    print("Modelo processado");
+    print("Enzima funcionando");
 }

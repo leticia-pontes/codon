@@ -57,6 +57,9 @@ Para documentação completa, consulte:
 - **[MANUAL_INSTALACAO.md](MANUAL_INSTALACAO.md)** - Guia passo a passo para leigos (Windows, Linux, macOS)
 - **[MANUAL_UTILIZACAO.md](MANUAL_UTILIZACAO.md)** - Sintaxe completa, tipos, funções, exemplos
 - **[QUICK_START.md](QUICK_START.md)** - Guia rápido de início
+- **[RESUMO_TECNICO.md](RESUMO_TECNICO.md)** - Visão geral técnica do projeto
+- **[CHECKLIST_ENTREGA.md](CHECKLIST_ENTREGA.md)** - Checklist de requisitos do curso
+- **[RELATORIO_TESTES.md](RELATORIO_TESTES.md)** - ✨ **NOVO** - Relatório de validação (7 testes, 100% sucesso)
 
 ---
 

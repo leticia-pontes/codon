@@ -1,0 +1,32 @@
+// Teste 2: Estruturas de Controle
+function main(): int {
+    print("=== Teste: Estruturas de Controle ===");
+    
+    // If/Else
+    var int nota;
+    nota = 8;
+    
+    if (nota >= 7) {
+        print("Aprovado");
+    } else {
+        print("Reprovado");
+    }
+    
+    // While
+    print("Contagem com while:");
+    var int i;
+    i = 0;
+    while (i < 5) {
+        print(i);
+        i = i + 1;
+    }
+    
+    // For
+    print("Contagem com for:");
+    for (i = 0; i < 5; i = i + 1) {
+        print(i);
+    }
+    
+    print("Teste concluido!");
+    return 0;
+}

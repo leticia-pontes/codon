@@ -1,0 +1,5 @@
+// Teste de Erro 3: Funcao nao declarada
+function main(): int {
+    funcaoInexistente();
+    return 0;
+}
