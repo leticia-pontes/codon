@@ -1,0 +1,12 @@
+// Teste de null
+
+function main(): void {
+    var int[] arr = null;
+    if (arr == null) {
+        print("arr é null");
+    }
+    arr = new int[5];
+    if (arr != null) {
+        print("arr não é mais null");
+    }
+}

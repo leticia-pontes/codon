@@ -1,0 +1,28 @@
+// Teste de comparação de strings
+
+function main(): void {
+    var string s1 = "hello";
+    var string s2 = "hello";
+    var string s3 = "world";
+    
+    if (s1 == s2) {
+        print("s1 == s2: true");
+    }
+    
+    if (s1 != s3) {
+        print("s1 != s3: true");
+    }
+    
+    if (s1 < s3) {
+        print("s1 < s3: true (hello < world)");
+    }
+    
+    if (s3 > s1) {
+        print("s3 > s1: true (world > hello)");
+    }
+    
+    var string nome = "Alice";
+    if (nome == "Alice") {
+        print("Bem-vinda, Alice!");
+    }
+}

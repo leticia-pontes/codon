@@ -1,0 +1,16 @@
+// Teste de loop infinito com break
+
+function main(): void {
+    var int contador = 0;
+    
+    loop {
+        print("Contador:", contador);
+        contador = contador + 1;
+        
+        if (contador >= 5) {
+            break;
+        }
+    }
+    
+    print("Loop finalizado!");
+}

@@ -26,44 +26,44 @@ V = {
 T = {
     // Palavras-chave de controle
     if, elif, else, while, for, return, break, continue,
-    
+
     // Palavras-chave de declaração
     var, const, function, procedure, void, class, extends, new,
-    
+
     // Palavras-chave de tipos primitivos
-    int, float, decimal, bool, char, string, 
-    
+    int, float, decimal, bool, char, string,
+
     // Palavras-chave de tipos biológicos
     dna, rna, prot, Nbase,
-    
+
     // Palavras-chave de I/O
     print, read,
-    
+
     // Palavras-chave de valores
     true, false, null,
-    
+
     // Operadores lógicos
     and, or, not, &&, ||, !,
-    
+
     // Operadores relacionais
     ==, !=, >, <, >=, <=,
-    
+
     // Operadores aritméticos
     +, -, *, /, %, ^,
-    
+
     // Operadores de atribuição
     =, +=, -=, *=, /=, %=, <-,
-    
+
     // Operadores de range
     .., ...,
-    
+
     // Delimitadores
     (, ), {, }, [, ], ;, :, ,, .,
-    
+
     // Literais
     literal_inteiro, literal_real, literal_string, literal_char,
     literal_dna, literal_rna, literal_prot,
-    
+
     // Identificador
     identificador
 }

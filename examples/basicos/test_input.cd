@@ -1,0 +1,17 @@
+// Teste de leitura de dados
+
+function main(): void {
+    print("Digite seu nome:");
+    var string nome = input();
+    print("Olá,", nome);
+
+    print("Digite sua idade:");
+    var int idade = inputInt();
+    print("Você tem", idade, "anos");
+
+    if (idade >= 18) {
+        print("Você é maior de idade");
+    } else {
+        print("Você é menor de idade");
+    }
+}

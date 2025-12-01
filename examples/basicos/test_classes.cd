@@ -1,0 +1,32 @@
+// Teste de classes básicas em Codon
+// Deve criar Point, acessar campos, modificar valores
+
+class Point {
+    x: int;
+    y: int;
+}
+
+procedure main() {
+    // Cria ponto
+    p1 = Point(10, 20);
+    
+    // Acessa e exibe coordenadas
+    print("Ponto 1:\n");
+    print("x = ");
+    printInt(p1.x);
+    print("\n");
+    print("y = ");
+    printInt(p1.y);
+    print("\n");
+    
+    // Cria segundo ponto
+    p2 = Point(5, 15);
+    
+    print("Ponto 2:\n");
+    print("x = ");
+    printInt(p2.x);
+    print("\n");
+    print("y = ");
+    printInt(p2.y);
+    print("\n");
+}

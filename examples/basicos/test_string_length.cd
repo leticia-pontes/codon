@@ -1,0 +1,11 @@
+// Teste de String.length e substring
+procedure main() {
+    s = "hello";
+    print("len = ");
+    printInt(s.length);
+    print("\n");
+
+    sub = substring(s, 1, 4);
+    print(sub);
+    print("\n");
+}

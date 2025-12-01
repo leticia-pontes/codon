@@ -1,0 +1,19 @@
+// Exemplo de enums
+
+enum Cor {
+    Vermelho = 1,
+    Verde = 2,
+    Azul = 3
+};
+
+procedure main() {
+    var int c;
+    c = Cor.Verde;
+    if (c == Cor.Vermelho) {
+        print("Vermelho");
+    } elif (c == Cor.Verde) {
+        print("Verde");
+    } else {
+        print("Outro");
+    }
+}

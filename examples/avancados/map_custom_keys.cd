@@ -1,0 +1,26 @@
+// Map com chave de tipo customizado usando equals/hash
+class Point {
+  x: int;
+  y: int;
+
+  function equals(other: Point): bool {
+    return self.x == other.x && self.y == other.y;
+  }
+
+  function hash(): int {
+    return self.x * 31 + self.y;
+  }
+}
+
+var m;
+m = new map[Point, string](8);
+
+var p1; p1 = new Point(1, 2);
+var p2; p2 = new Point(3, 4);
+
+m[p1] = "A";
+m[p2] = "B";
+
+// Recupera com outra instância com mesmos campos: usa equals
+print(m[new Point(1, 2)]);
+print(m[new Point(0, 0)]); // não encontrado -> default

@@ -3,11 +3,11 @@ from typing import Any, List
 
 # Lista de Palavras-Chave (KWD)
 KEYWORDS = {
-    "and", "or", "not", "if", "else", "for", "while", "return",
-    "break", "continue", "function", "var", "const", "import", "from", "as",
+    "and", "or", "not", "if", "else", "elif", "for", "while", "loop", "return",
+    "break", "continue", "function", "procedure", "var", "const", "import", "from", "as",
     "struct", "enum", "match", "case", "default", "true", "false", "null",
-    "pub", "extern", "use",
-    "void", "read", "print", "new"
+    "pub", "extern", "use", "class", "extends",
+    "void", "read", "print", "new", "int", "float", "double", "string", "bool", "char"
 }
 
 TOKEN_KINDS = {

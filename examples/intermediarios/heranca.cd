@@ -16,7 +16,7 @@ class RNA extends Sequencia {
 function main(): void {
     var dna_seq = new DNA();
     dna_seq.bases = "ATCGTACG";
-    dna_seq.comprimento = length(dna_seq.bases);
+    dna_seq.comprimento = dna_seq.bases.length;
 
     print("DNA:");
 }

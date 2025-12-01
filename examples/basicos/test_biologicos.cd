@@ -1,0 +1,23 @@
+// Teste de tipos biológicos: DNA, RNA, Proteína
+procedure main() {
+    d1 = dna"ATCG";
+    d2 = dna"GGA";
+    print("d1 = "); print(d1); print(" len="); printInt(d1.length); print("\n");
+    print("d2 = "); print(d2); print(" len="); printInt(d2.length); print("\n");
+
+    // Concatenação
+    d3 = d1 + d2;
+    print("d3 = "); print(d3); print(" len="); printInt(d3.length); print("\n");
+
+    // Substring
+    sub = substring(d3, 2, 6);
+    print("sub = "); print(sub); print(" len="); printInt(sub.length); print("\n");
+
+    // Comparação
+    print("eq? "); printInt(d1 == d1); print(" ne? "); printInt(d1 == d2); print("\n");
+
+    r = rna"AUCG";
+    p = prot"MKL";
+    print("r = "); print(r); print(" len="); printInt(r.length); print("\n");
+    print("p = "); print(p); print(" len="); printInt(p.length); print("\n");
+}

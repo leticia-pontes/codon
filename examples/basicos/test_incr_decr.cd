@@ -1,0 +1,20 @@
+/" Teste de operadores ++ e -- "/
+
+var x = 5;
+print(x);    // 5
+
+var y = x++;  // y recebe 5, x vira 6
+print(y);    // 5
+print(x);    // 6
+
+var z = x--;  // z recebe 6, x vira 5
+print(z);    // 6
+print(x);    // 5
+
+// Teste em loops
+var i = 0;
+while (i < 3) {
+    print(i);
+    i++;
+}
+// Deve imprimir: 0, 1, 2

@@ -1,0 +1,20 @@
+// Exemplos de slicing: string e array
+// Nota: slicing nativo arr[i..j] ainda não implementado; exemplos usam alternativas.
+
+procedure main() {
+    // String: usar substring(s, i, j)
+    s = "abcdef";
+    mid = substring(s, 2, 5); // "cde"
+    print(mid); print("\n");
+
+    // Array: cópia manual
+    arr = [10, 20, 30, 40, 50];
+    i = 1; j = 4; n = j - i;
+    sub = new int[n];
+    k = 0;
+    while (k < n) {
+        sub[k] = arr[i + k];
+        k = k + 1;
+    }
+    print(sub[0]); print(" "); print(sub[1]); print(" "); print(sub[2]); print("\n");
+}

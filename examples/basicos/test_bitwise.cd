@@ -1,0 +1,31 @@
+// Teste de operações bit-a-bit
+
+function main(): void {
+    var int a = 12;  // 1100 em binário
+    var int b = 10;  // 1010 em binário
+    
+    print("a =", a, "(binário: 1100)");
+    print("b =", b, "(binário: 1010)");
+    
+    var int and_result = a & b;  // 1000 = 8
+    print("a & b =", and_result);
+    
+    var int or_result = a | b;   // 1110 = 14
+    print("a | b =", or_result);
+    
+    var int xor_result = a ^ b;  // 0110 = 6
+    print("a ^ b =", xor_result);
+    
+    var int not_result = ~a;     // inverte bits
+    print("~a =", not_result);
+    
+    var int shl_result = a << 2; // 110000 = 48
+    print("a << 2 =", shl_result);
+    
+    var int shr_result = a >> 2; // 0011 = 3
+    print("a >> 2 =", shr_result);
+    
+    // Teste de potência com ** ao invés de ^
+    var int pow_result = 2 ** 8;
+    print("2 ** 8 =", pow_result);
+}

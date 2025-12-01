@@ -32,7 +32,7 @@ function main(): void {
     var RNA rna_seq = transcrever(dna_seq);
     var Proteina proteina_seq = traduzir(rna_seq);
 
-    print("DNA:");
-    print("RNA:");
-    print("Proteina:");
+    print("DNA:", dna.sequencia);
+    print("RNA:", rna.sequencia);
+    print("Proteína:", proteina.aminoacidos);
 }

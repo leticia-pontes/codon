@@ -1,0 +1,14 @@
+/" Teste de concatenação de strings com UTF-8 "/
+
+var nome = "Alice";
+var saudacao = "Olá, " + nome + "!";
+
+print(saudacao);
+
+// Concatenação com literais
+var resultado = "2 + 2 = " + "4";
+print(resultado);
+
+// Teste de acentuação
+var msg = "É fácil usar UTF-8!";
+print(msg);

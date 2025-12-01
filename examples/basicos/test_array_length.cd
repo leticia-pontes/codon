@@ -1,0 +1,12 @@
+// Teste de Array.length (new e literal)
+procedure main() {
+    a = new int[5];
+    print("alen = ");
+    printInt(a.length);
+    print("\n");
+
+    b = [1,2,3,4];
+    print("blen = ");
+    printInt(b.length);
+    print("\n");
+}

@@ -1,0 +1,46 @@
+procedure main() {
+    var int[] a;
+    a = new int[5];
+    a[0] = 10;
+    a[1] = 20;
+    a[2] = 30;
+    a[3] = 40;
+    a[4] = 50;
+
+    var int[] s1;
+    s1 = a[1..4]; // 20,30,40
+    print("slice int: ");
+    for (x in s1) {
+        print(x, " ");
+    }
+    print("\n");
+
+    var double[] d;
+    d = new double[4];
+    d[0] = 1.5;
+    d[1] = 2.5;
+    d[2] = 3.0;
+    d[3] = 4.0;
+    var double[] s2;
+    s2 = d[0..2]; // 1.5,2.5
+    print("slice double: ");
+    for (y in s2) {
+        print(y, " ");
+    }
+    print("\n");
+
+    var string s;
+    s = "Codon";
+    var string[] arrs;
+    arrs = new string[3];
+    arrs[0] = "Oi";
+    arrs[1] = s;
+    arrs[2] = "!";
+    var string[] s3;
+    s3 = arrs[0..2]; // "Oi", "Codon"
+    print("slice string[]: ");
+    for (z in s3) {
+        print(z, " ");
+    }
+    print("\n");
+}

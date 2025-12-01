@@ -5,7 +5,7 @@ function calcular_cn(amostra: string, valor_ct: float): string {
     } else if (valor_ct > 35.0) {
         return "Nao_Detectado";
     }
-    amostra += " Analisada"; // Operador composto
+    amostra = amostra + " Analisada"; // Concatenação suportada
     var bool resultado = true;
     return "Resultado";
 }

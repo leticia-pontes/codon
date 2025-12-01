@@ -1,0 +1,8 @@
+function main(): int {
+  var s = "ABC";
+  print("Chars (codes):");
+  for (c in s) {
+    print(c);
+  }
+  return 0;
+}

@@ -1,0 +1,5 @@
+// Teste de sequências de escape em strings
+procedure main() {
+    print("Linha 1\nLinha 2\tTAB\nAspas: \"ok\" e barra: \\ ");
+    print("\n");
+}

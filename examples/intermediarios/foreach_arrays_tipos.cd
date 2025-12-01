@@ -1,0 +1,30 @@
+function main(): int {
+  print("Double array:");
+  var n = 3;
+  var a = new double[n];
+  a[0] = 1.5;
+  a[1] = 2.5;
+  a[2] = 3.0;
+  for (x in a) {
+    print(x);
+  }
+
+  print("Bool array:");
+  var b = new bool[4];
+  b[0] = true;
+  b[1] = false;
+  b[2] = true;
+  b[3] = true;
+  for (v in b) {
+    print(v);
+  }
+
+  print("String pointer array:");
+  var m = new string[2];
+  m[0] = "Oi";
+  m[1] = "Codon";
+  for (s in m) {
+    print(s);
+  }
+  return 0;
+}

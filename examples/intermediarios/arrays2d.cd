@@ -1,0 +1,28 @@
+procedure main() {
+    var int[][] a;
+    a = new int[3][4];
+
+    // Fill with i*10 + j
+    for (var int i = 0; i < 3; i = i + 1) {
+        for (var int j = 0; j < 4; j = j + 1) {
+            a[i][j] = i*10 + j;
+        }
+    }
+
+    print("Matriz:\n");
+    for (var int i = 0; i < 3; i = i + 1) {
+        for (var int j = 0; j < 4; j = j + 1) {
+            print(a[i][j], " ");
+        }
+        print("\n");
+    }
+
+    // Foreach 2D: lines and elements
+    print("Foreach linhas:\n");
+    for (linha in a) {
+        for (x in linha) {
+            print(x, " ");
+        }
+        print("\n");
+    }
+}
