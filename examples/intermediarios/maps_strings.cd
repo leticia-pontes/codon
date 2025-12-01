@@ -1,0 +1,14 @@
+// Exemplo de mapas com chaves string
+
+procedure main() {
+    var map[string,int] m;
+    m = new map[string,int](8);
+    m["ana"] = 30;
+    m["bob"] = 25;
+    var int a;
+    a = m["ana"];
+    print("ana=", a);
+    var int b;
+    b = m["carol"]; // nao existente -> 0
+    print("carol=", b);
+}

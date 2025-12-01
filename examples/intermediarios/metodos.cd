@@ -1,0 +1,23 @@
+class Pessoa {
+  nome: string;
+  idade: int;
+
+  function saudacao(): string {
+    print("[saudacao] nome=", self.nome);
+    return "Olá, " + self.nome;
+  }
+
+  procedure aniversario() {
+    print("[aniversario] antes=", self.idade);
+    self.idade += 1;
+    print("[aniversario] depois=", self.idade);
+  }
+}
+
+function main(): int {
+  var p = new Pessoa("Ana", 29);
+  print(p.saudacao());
+  p.aniversario();
+  print("idade=", p.idade);
+  return 0;
+}

@@ -31,11 +31,24 @@ class DeclaracaoFuncao(ASTNode):
     corpo: list
     is_procedure: bool
     tipo_retorno: str | None = None
+    type_params: List[str] = None  # Parâmetros de tipo genérico (ex: ['T', 'U'])
 
 @dataclass
 class DeclaracaoClasse(ASTNode):
     nome: str
     campos: List[Tuple[str, str]]
+    metodos: List[ASTNode] = None
+    type_params: List[str] = None  # Parâmetros de tipo genérico (ex: ['T'])
+
+@dataclass
+class DeclaracaoMetodo(ASTNode):
+    classe: str
+    nome: str
+    parametros: list
+    corpo: list
+    is_procedure: bool
+    tipo_retorno: str | None = None
+    type_params: List[str] = None  # Parâmetros de tipo genérico
 
 @dataclass
 class InstrucaoIf(ASTNode):
@@ -49,6 +62,12 @@ class InstrucaoLoopFor(ASTNode):
     inicializacao: ASTNode
     condicao: ASTNode
     passo: ASTNode
+    corpo: List[ASTNode]
+
+@dataclass
+class InstrucaoLoopForEach(ASTNode):
+    iter_var: str
+    iterable: ASTNode
     corpo: List[ASTNode]
 
 @dataclass
@@ -105,6 +124,7 @@ class DeclaracaoVariavel(ASTNode):
 class ChamadaFuncao(ASTNode):
     nome: Union[str, ASTNode]
     argumentos: List[ASTNode]
+    type_args: List[str] = None  # Argumentos de tipo para funções genéricas (ex: ['int'] em func<int>(x))
 
 @dataclass
 class AcessoCampo(ASTNode):
@@ -138,6 +158,11 @@ class CriacaoArray(ASTNode):
     tamanho: ASTNode
 
 @dataclass
+class CriacaoArray2D(ASTNode):
+    tipo: str
+    linhas: ASTNode
+    colunas: ASTNode
+@dataclass
 class LiteralArray(ASTNode):
     elementos: List[ASTNode]
 
@@ -145,6 +170,22 @@ class LiteralArray(ASTNode):
 class CriacaoClasse(ASTNode):
     classe: str
     argumentos: List[ASTNode]
+    type_args: List[str] = None  # Argumentos de tipo para classes genéricas (ex: ['int'] em Container<int>)
+
+@dataclass
+class LiteralTuple(ASTNode):
+    elementos: List[ASTNode]
+
+@dataclass
+class DeclaracaoEnum(ASTNode):
+    nome: str
+    membros: List[Tuple[str, int]]
+
+@dataclass
+class CriacaoMapa(ASTNode):
+    tipo_chave: str
+    tipo_valor: str
+    capacidade: ASTNode
 
 
 # ==========================================
@@ -189,11 +230,28 @@ class Parser:
                 return self._decl_funcao(is_procedure=(t.valor in ('procedure','void')))
             elif t.valor == 'class':
                 return self._decl_classe()
+            elif t.valor == 'struct':
+                # Structs reutilizam a mesma lógica de classes, sem métodos obrigatórios
+                return self._decl_classe()
+            elif t.valor == 'enum':
+                return self._decl_enum()
         return self._instrucao()
 
     def _decl_funcao(self, is_procedure: bool) -> DeclaracaoFuncao:
         self.ts.expect("KWD")
         nome_token = self.ts.expect("ID")
+        
+        # Suporte a parâmetros de tipo genérico: function nome<T, U>(...)
+        type_params = None
+        if self.ts.match("LT"):  # '<'
+            type_params = []
+            while True:
+                type_param = self.ts.expect("ID").valor
+                type_params.append(type_param)
+                if not self.ts.match("COMMA"):
+                    break
+            self.ts.expect("GT")  # '>'
+        
         self.ts.expect("LPAREN")
 
         parametros = []
@@ -208,22 +266,41 @@ class Parser:
             tipo_retorno = self._tipo().valor
 
         corpo = self._bloco()
-        # Ordena argumentos conforme dataclass: nome, parametros, corpo, is_procedure, tipo_retorno
-        return DeclaracaoFuncao(nome_token.valor, parametros, corpo, is_procedure, tipo_retorno)
+        # Ordena argumentos conforme dataclass: nome, parametros, corpo, is_procedure, tipo_retorno, type_params
+        return DeclaracaoFuncao(nome_token.valor, parametros, corpo, is_procedure, tipo_retorno, type_params)
 
     def _decl_classe(self) -> DeclaracaoClasse:
         self.ts.expect("KWD")
         nome_token = self.ts.expect("ID")
+        
+        # Suporte a parâmetros de tipo genérico: class Nome<T, U> { ... }
+        type_params = None
+        if self.ts.match("LT"):  # '<'
+            type_params = []
+            while True:
+                type_param = self.ts.expect("ID").valor
+                type_params.append(type_param)
+                if not self.ts.match("COMMA"):
+                    break
+            self.ts.expect("GT")  # '>'
+        
         # Suporte opcional a 'extends NomeBase'
         nxt = self.ts.peek()
         if nxt and ((nxt.tipo == 'KWD' and nxt.valor == 'extends') or (nxt.tipo == 'ID' and nxt.valor == 'extends')):
             self.ts.next()  # consome 'extends'
             _ = self.ts.expect("ID")  # nome da superclasse (ignorado nesta AST)
         self.ts.expect("LBRACE")
-        campos = []
+        campos: List[Tuple[str,str]] = []
+        metodos: List[DeclaracaoMetodo] = []
         while not self.ts.match("RBRACE"):
-            campos.append(self._decl_campo())
-        return DeclaracaoClasse(nome_token.valor, campos)
+            peek = self.ts.peek()
+            if peek and peek.tipo == 'KWD' and peek.valor in ('function','procedure','void'):
+                # Parse método reutilizando _decl_funcao
+                func_decl = self._decl_funcao(is_procedure=(peek.valor in ('procedure','void')))
+                metodos.append(DeclaracaoMetodo(nome_token.valor, func_decl.nome, func_decl.parametros, func_decl.corpo, func_decl.is_procedure, func_decl.tipo_retorno, func_decl.type_params))
+            else:
+                campos.append(self._decl_campo())
+        return DeclaracaoClasse(nome_token.valor, campos, metodos, type_params)
 
     def _decl_campo(self) -> Tuple[str, str]:
         nome = self.ts.expect("ID").valor
@@ -231,6 +308,25 @@ class Parser:
         tipo = self._tipo().valor
         self.ts.expect("SEMI")
         return (nome, tipo)
+
+    def _decl_enum(self) -> DeclaracaoEnum:
+        self.ts.expect("KWD")  # 'enum'
+        nome_token = self.ts.expect("ID")
+        self.ts.expect("LBRACE")
+        membros: List[Tuple[str,int]] = []
+        valor_atual = 0
+        while not self.ts.match("RBRACE"):
+            ident = self.ts.expect("ID").valor
+            if self.ts.match("ASSIGN"):
+                # aceita DEC_INT como valor
+                num_tok = self.ts.expect("DEC_INT")
+                valor_atual = int(num_tok.valor)
+            membros.append((ident, valor_atual))
+            valor_atual += 1
+            # vírgulas opcionais
+            self.ts.match("COMMA")
+        self.ts.expect("SEMI")
+        return DeclaracaoEnum(nome_token.valor, membros)
 
     def _tipo(self) -> Optional[Token]:
         # Suporta tipos ID (classes) ou KWD (primitivos)
@@ -303,11 +399,25 @@ class Parser:
         t1 = self.ts.peek()
         t2 = self.ts.peek(2)
 
-        # detecção de tipo opcional (ex: var int x;)
-        if t1 and (t1.tipo in ("KWD","ID")) and t2 and (t2.tipo in ("ID","LBRACK")):
-            self.ts.next()  # consome tipo
-            while self.ts.match("LBRACK"):
+        # detecção de tipo opcional (ex: var int x; ou var Container<int> x;)
+        if t1 and (t1.tipo in ("KWD","ID")) and t2 and (t2.tipo in ("ID","LBRACK","LT")):
+            tipo_token = self.ts.next()  # consome tipo
+            # suporte especial para map[TipoChave,TipoValor]
+            if tipo_token.valor == 'map' and self.ts.match("LBRACK"):
+                _ = self._tipo()
+                self.ts.expect("COMMA")
+                _ = self._tipo()
                 self.ts.expect("RBRACK")
+            # suporte para tipos genéricos: Container<T>
+            elif self.ts.match("LT"):
+                while True:
+                    _ = self._tipo()
+                    if not self.ts.match("COMMA"):
+                        break
+                self.ts.expect("GT")
+            else:
+                while self.ts.match("LBRACK"):
+                    self.ts.expect("RBRACK")
             var_name_token = self.ts.expect("ID")
         else:
             var_name_token = self.ts.expect("ID")
@@ -401,10 +511,23 @@ class Parser:
         return InstrucaoLoopInfinito(corpo)
 
     def _instrucao_for(self) -> InstrucaoLoopFor:
-        # Suporta variantes com e sem parênteses
+        # Suporta variantes com e sem parênteses, e sintaxe foreach: for (x in expr) { ... }
         self.ts.expect("KWD")  # 'for'
         has_parens = self.ts.match("LPAREN") is not None
 
+        # Detecta foreach: ID 'in' expr
+        save1 = self.ts.peek()
+        save2 = self.ts.peek(2)
+        if save1 and save1.tipo == 'ID' and save2 and ((save2.tipo == 'KWD' and save2.valor == 'in') or (save2.tipo == 'ID' and save2.valor == 'in')):
+            iter_var = self.ts.expect("ID").valor
+            self.ts.next()  # consome 'in'
+            iterable = self._expressao()
+            if has_parens:
+                self.ts.expect("RPAREN")
+            corpo = self._bloco()
+            return InstrucaoLoopForEach(iter_var, iterable, corpo)
+
+        # Caso padrão: for clássico
         # Inicialização: pode ser declaração ou atribuição
         t = self.ts.peek()
         if t and t.tipo == 'KWD' and t.valor in ('var', 'const'):
@@ -470,7 +593,62 @@ class Parser:
             if not tok:
                 break
 
-            if tok.tipo == "LPAREN":
+            # Suporte a argumentos de tipo para funções genéricas: func<int>(x)
+            # Só tenta parsear <tipos> se:
+            #   - token atual é LT
+            #   - node é Variavel (nome de função)
+            #   - próximos tokens se parecem com tipo, vírgula, tipo, ..., GT, LPAREN
+            type_args = None
+            if tok.tipo == "LT" and isinstance(node, Variavel):
+                # Olha adiante sem consumir
+                # Heurística: se vemos ID/KWD (tipo), então COMMA ou GT, e eventualmente GT seguido de LPAREN, é tipo genérico
+                lookahead_idx = 2  # peek(2) é token após '<'
+                temp_types_found = []
+                looks_like_generic = False
+                
+                # Tenta detectar padrão: < tipo [, tipo]* > (
+                next_tok = self.ts.peek(lookahead_idx)
+                if next_tok and next_tok.tipo in ("KWD", "ID"):
+                    # Possível tipo
+                    temp_types_found.append(True)
+                    lookahead_idx += 1
+                    # Continue olhando por COMMA ou GT
+                    while True:
+                        la_tok = self.ts.peek(lookahead_idx)
+                        if not la_tok:
+                            break
+                        if la_tok.tipo == "COMMA":
+                            # Deve ter outro tipo
+                            lookahead_idx += 1
+                            type_tok = self.ts.peek(lookahead_idx)
+                            if type_tok and type_tok.tipo in ("KWD", "ID"):
+                                temp_types_found.append(True)
+                                lookahead_idx += 1
+                            else:
+                                break
+                        elif la_tok.tipo == "GT":
+                            # Fim dos tipos, verifica se tem '(' depois
+                            lookahead_idx += 1
+                            paren_tok = self.ts.peek(lookahead_idx)
+                            if paren_tok and paren_tok.tipo == "LPAREN":
+                                looks_like_generic = True
+                            break
+                        else:
+                            break
+                
+                if looks_like_generic:
+                    # Agora consome de verdade
+                    self.ts.next()  # consume '<'
+                    type_args = []
+                    while True:
+                        tipo_arg = self._tipo().valor
+                        type_args.append(tipo_arg)
+                        if not self.ts.match("COMMA"):
+                            break
+                    self.ts.expect("GT")  # '>'
+                    tok = self.ts.peek()  # atualiza tok para LPAREN
+            
+            if tok and tok.tipo == "LPAREN":
                 self.ts.next()  # consume '('
 
                 argumentos = []
@@ -490,16 +668,16 @@ class Parser:
                 #
                 # Não fazemos caso especial para Variavel.
                 # `node` vira o callee real.
-                node = ChamadaFuncao(node, argumentos)
+                node = ChamadaFuncao(node, argumentos, type_args)
                 continue
 
-            if tok.tipo == "DOT":
+            if tok and tok.tipo == "DOT":
                 self.ts.next()  # consume '.'
                 campo = self.ts.expect("ID")
                 node = AcessoCampo(node, campo.valor)
                 continue
 
-            if tok.tipo == "LBRACK":
+            if tok and tok.tipo == "LBRACK":
                 self.ts.next()  # consume '['
                 indice = self._expressao()
                 self.ts.expect("RBRACK")
@@ -545,9 +723,16 @@ class Parser:
             # Expressão Agrupada
             elif t.tipo=="LPAREN":
                 self.ts.next()
-                expr = self._expressao()
+                # Suporta tupla: (expr1, expr2, ...). Caso só 1, é agrupamento.
+                elementos: List[ASTNode] = []
+                first = self._expressao()
+                elementos.append(first)
+                while self.ts.match('COMMA'):
+                    elementos.append(self._expressao())
                 self.ts.expect("RPAREN")
-                return expr
+                if len(elementos) == 1:
+                    return first
+                return LiteralTuple(elementos)
 
             # ID (Variável)
             elif t.tipo=="ID":
@@ -569,8 +754,31 @@ class Parser:
                 self.ts.next()
                 class_type = tipo_token.valor
 
+                # Suporte: new map[TipoChave,TipoValor](capacidade)
+                if class_type == 'map' and self.ts.match("LBRACK"):
+                    # parse tipos: TKey, TVal
+                    tk = self._tipo().valor
+                    self.ts.expect("COMMA")
+                    tv = self._tipo().valor
+                    self.ts.expect("RBRACK")
+                    self.ts.expect("LPAREN")
+                    cap = self._expressao()
+                    self.ts.expect("RPAREN")
+                    return CriacaoMapa(tk, tv, cap)
+
+                # Suporte a argumentos de tipo para classes genéricas: new Container<int>(...)
+                type_args = None
+                if self.ts.match("LT"):  # '<'
+                    type_args = []
+                    while True:
+                        tipo_arg = self._tipo().valor
+                        type_args.append(tipo_arg)
+                        if not self.ts.match("COMMA"):
+                            break
+                    self.ts.expect("GT")  # '>'
+
                 if self.ts.match("LPAREN"):
-                    # Criação de Classe: new MinhaClasse(arg1, arg2)
+                    # Criação de Classe: new MinhaClasse(arg1, arg2) ou new Container<int>(x)
                     argumentos = []
                     while self.ts.peek() and self.ts.peek().tipo != 'RPAREN':
                         arg = self._expressao()
@@ -578,13 +786,18 @@ class Parser:
                         if self.ts.peek() and self.ts.peek().tipo == "COMMA":
                             self.ts.next()
                     self.ts.expect("RPAREN")
-                    return CriacaoClasse(class_type, argumentos)
+                    return CriacaoClasse(class_type, argumentos, type_args)
 
                 elif self.ts.match("LBRACK"):
-                    # Criação de Array: new int[tamanho]
-                    tamanho = self._expressao()
+                    # Criação de Array: new T[m] ou new T[m][n]
+                    m = self._expressao()
                     self.ts.expect("RBRACK")
-                    return CriacaoArray(class_type, tamanho)
+                    # Verifica segunda dimensão
+                    if self.ts.match("LBRACK"):
+                        n = self._expressao()
+                        self.ts.expect("RBRACK")
+                        return CriacaoArray2D(class_type, m, n)
+                    return CriacaoArray(class_type, m)
 
             # Range Expression: expr..expr (Usado em For-Each, mas tratado aqui como expressão)
             # NOTA: Range é um operador de baixa precedência, mas como literal é tratado aqui se for literal..literal

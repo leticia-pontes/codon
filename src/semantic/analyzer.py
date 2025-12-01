@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional, Tuple, Union
 from src.parser.ast.ast_base import (
-    Programa, DeclaracaoFuncao, DeclaracaoClasse, InstrucaoAtribuicao,
+    Programa, DeclaracaoFuncao, DeclaracaoClasse, DeclaracaoMetodo, InstrucaoAtribuicao,
     InstrucaoIf, InstrucaoLoopWhile, InstrucaoLoopFor, InstrucaoImpressao,
     InstrucaoRetorno, ExpressaoBinaria, ExpressaoUnaria, Literal, Variavel,
     ChamadaFuncao, AcessoArray, AcessoCampo, CriacaoClasse, CriacaoArray,
@@ -100,6 +100,10 @@ class SemanticAnalyzer:
                 self._register_function(decl)
             elif isinstance(decl, DeclaracaoClasse):
                 self._register_class(decl)
+                # Registra métodos da classe
+                if getattr(decl, 'metodos', None):
+                    for m in decl.metodos:
+                        self._register_method(m)
 
         for decl in program.declaracoes:
             self._analyze_declaration(decl)
@@ -150,11 +154,23 @@ class SemanticAnalyzer:
         )
         self.current_scope.define(class_symbol, self.error_handler)
 
+    def _register_method(self, decl: DeclaracaoMetodo):
+        line, col = self._get_coords(decl)
+        param_count = len(decl.parametros) if decl.parametros else 0
+        ret_type = decl.tipo_retorno if not decl.is_procedure else 'void'
+        # +1 para self implícito
+        func_symbol = Symbol(f"{decl.classe}_{decl.nome}", ret_type, 'function', line, col, param_count=param_count+1, is_procedure=decl.is_procedure)
+        self.current_scope.define(func_symbol, self.error_handler)
+
     def _analyze_declaration(self, decl: ASTNode):
         if isinstance(decl, DeclaracaoFuncao):
             self._analyze_function(decl)
         elif isinstance(decl, DeclaracaoClasse):
             self._analyze_class(decl)
+            for m in getattr(decl, 'metodos', []) or []:
+                self._analyze_method(m)
+        elif isinstance(decl, DeclaracaoMetodo):
+            self._analyze_method(decl)
         elif decl is not None:
             self._analyze_stmt(decl)
 
@@ -197,6 +213,26 @@ class SemanticAnalyzer:
                 line, col, "SEM008"
             ))
 
+        self.pop_scope()
+        self.current_function = None
+
+    def _analyze_method(self, decl: DeclaracaoMetodo):
+        # Método tratado como função com parâmetro self implícito
+        self.current_function = self.current_scope.lookup(f"{decl.classe}_{decl.nome}")
+        self.found_return_in_current_function = False
+        self.push_scope(f"method_{decl.classe}_{decl.nome}")
+        # Self
+        self.current_scope.define(Symbol('self', decl.classe, 'param', -1, -1), self.error_handler)
+        for param_name, param_type in decl.parametros or []:
+            if self.global_scope.lookup(param_type) is None:
+                self.error_handler.report_error(SemanticError(
+                    f"Tipo '{param_type}' do parâmetro '{param_name}' é indefinido.", -1, -1, "SEM027"))
+            self.current_scope.define(Symbol(param_name, param_type, 'param', -1, -1), self.error_handler)
+        for stmt in decl.corpo:
+            self._analyze_stmt(stmt)
+        if (not decl.is_procedure) and decl.tipo_retorno != 'void' and (not self.found_return_in_current_function):
+            self.error_handler.report_error(SemanticError(
+                f"Método '{decl.nome}' da classe '{decl.classe}' requer 'return'.", -1, -1, "SEM008"))
         self.pop_scope()
         self.current_function = None
 

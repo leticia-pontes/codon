@@ -1,0 +1,11 @@
+// Exemplo de tuplas
+
+procedure main() {
+    var int a;
+    a = 42;
+    var string b;
+    b = "ok";
+    var auto t; // sem verificador de tipos, apenas variável
+    t = (a, b);
+    print(t[0], " ", t[1]);
+}

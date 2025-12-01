@@ -1,0 +1,13 @@
+function main(): int {
+  print("Range 1..5:");
+  for (i in 1..5) {
+    print(i);
+  }
+
+  print("Array [10,20,30]:");
+  var arr = [10, 20, 30];
+  for (x in arr) {
+    print(x);
+  }
+  return 0;
+}

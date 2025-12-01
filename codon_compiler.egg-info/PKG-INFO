@@ -1,3 +1,27 @@
+Metadata-Version: 2.4
+Name: codon-compiler
+Version: 0.1.0
+Summary: Compilador educacional Codon (LLVM IR)
+Home-page: https://github.com/leticia-pontes/codon
+Author: Cauã Santos, Emerson Caíque, Hugo Pacheco, José Victor Tranquilino, Laura Yumi, Letícia Pontes
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Education
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: llvmlite
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
 # Codon – Linguagem e Compilador Educacional (LLVM)
 
 [![CI](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml/badge.svg)](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml)
@@ -13,7 +37,6 @@
 * [Visão Geral](#visão-geral)
 
   * [Fluxo do Compilador](#fluxo-do-compilador)
-* [📘 Manuais](#-manuais)
 * [Manual de Utilização](#manual-de-utilização)
 * [Instalação (passo a passo)](#instalação-passo-a-passo)
 
@@ -47,16 +70,6 @@ fonte (.cd)
   ├─► Analisador Semântico (escopos, tipos)
   └─► Codegen (LLVM IR) ──► JIT (executa main)
 ```
-
----
-
-## 📘 Manuais
-
-Para documentação completa, consulte:
-
-- **[MANUAL_INSTALACAO.md](MANUAL_INSTALACAO.md)** - Guia passo a passo para leigos (Windows, Linux, macOS)
-- **[MANUAL_UTILIZACAO.md](MANUAL_UTILIZACAO.md)** - Sintaxe completa, tipos, funções, exemplos
-- **[QUICK_START.md](QUICK_START.md)** - Guia rápido de início
 
 ---
 
@@ -285,59 +298,9 @@ codon/
 
 ## Entrega
 
-**Link do repositório do projeto:**
+Link do repositório do projeto:
 
 https://github.com/leticia-pontes/codon
-
-### ✅ Checklist de Requisitos
-
-Conforme especificação da disciplina, o projeto entrega:
-
-- ✅ **Manual de utilização** → [MANUAL_UTILIZACAO.md](MANUAL_UTILIZACAO.md)
-  - Sintaxe completa da linguagem
-  - Tipos de dados, operadores, estruturas de controle
-  - Funções, arrays, strings, structs, classes, enums
-  - Generics e maps
-  - Funções nativas
-  - Exemplos completos
-
-- ✅ **Manual de instalação para leigo** → [MANUAL_INSTALACAO.md](MANUAL_INSTALACAO.md)
-  - Passo a passo detalhado para Windows, Linux e macOS
-  - Instalação de pré-requisitos (Python)
-  - Script automático de instalação
-  - Verificação e primeiro programa
-  - Solução de problemas comuns
-
-- ✅ **Analisador Léxico (Lexer)**
-  - Implementação: `src/lexer/analisador_lexico_completo.py`
-  - Tokens: `src/lexer/tokens.py`
-  - AFDs: `src/lexer/afds/`
-  - Testes: `test/lexer_test/`
-
-- ✅ **Analisador Sintático (Parser - AST)**
-  - Parser principal: `src/parser/ast/ast_base.py`
-  - Nós da AST: `src/parser/ast/declaracoes.py`, `src/parser/ast/expressoes.py`
-  - Gramática formal: `docs/gramatica-formal-atualizada.md`
-  - Testes: `test/parser_test/`
-
-- ✅ **Analisador Semântico**
-  - Implementação: `src/semantic/analyzer.py`
-  - Tabela de símbolos: `src/semantic/tabela_simbolos.py`
-  - Verificação de tipos: `src/semantic/verificador_tipos.py`
-  - Testes: `test/semantic_test/`
-
-- ✅ **Gerador de Código (LLVM IR)**
-  - Codegen principal: `src/codegen/llvm_codegen.py`
-  - Otimizador: `src/codegen/otimizador.py`
-  - Suporte a generics (monomorphization)
-  - Testes: `test/codegen_test/`
-
-### 📊 Estatísticas do Projeto
-
-- **14 testes unitários** (lexer, parser, semântico, codegen)
-- **47 exemplos funcionais** compilados e validados
-- **Cobertura completa** de features: arrays, strings, classes, herança, generics, enums, maps
-- **CI/CD** via GitHub Actions
 
 ---
 

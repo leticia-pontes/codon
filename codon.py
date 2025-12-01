@@ -22,6 +22,9 @@ if not arquivo.endswith(".cd"):
 if cmd == "run":
     compile_cd(arquivo, run=True)
 elif cmd == "build":
-    compile_cd(arquivo, run=False)
+    ir = compile_cd(arquivo, run=False)
+    # Imprime o LLVM IR resultante
+    if isinstance(ir, str):
+        print(ir)
 else:
     print_help()

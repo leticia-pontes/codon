@@ -1,12 +1,12 @@
 from llvmlite import ir
 from typing import Dict, Optional, Tuple
 from src.parser.ast.ast_base import (
-    Programa, DeclaracaoFuncao, InstrucaoAtribuicao, InstrucaoIf,
+    Programa, DeclaracaoFuncao, DeclaracaoMetodo, InstrucaoAtribuicao, InstrucaoIf,
     InstrucaoLoopWhile, InstrucaoLoopFor, InstrucaoImpressao,
     InstrucaoRetorno, ExpressaoBinaria, ExpressaoUnaria, Literal,
     Variavel, ChamadaFuncao, ASTNode, CriacaoArray, AcessoArray,
     InstrucaoBreak, InstrucaoContinue, LiteralArray, InstrucaoLoopInfinito,
-    DeclaracaoClasse, CriacaoClasse, AcessoCampo
+    DeclaracaoClasse, CriacaoClasse, AcessoCampo, InstrucaoLoopForEach, LiteralRange, CriacaoArray2D, LiteralTuple, DeclaracaoEnum, CriacaoMapa
 )
 
 
@@ -20,6 +20,13 @@ class LLVMCodeGenerator:
         self.loop_stack: list[Tuple[ir.Block, ir.Block]] = []
         # Mapeamento de classes: nome -> (struct_type, {campo: index})
         self.classes: Dict[str, Tuple[ir.LiteralStructType, Dict[str, int]]] = {}
+        # Metadados para mapas: nome -> tipos
+        self.maps: Dict[str, Dict[str, ir.Type]] = {}
+        # Generics: rastreia declarações genéricas e instanciações
+        self.generic_functions: Dict[str, DeclaracaoFuncao] = {}  # nome -> declaração
+        self.generic_classes: Dict[str, DeclaracaoClasse] = {}  # nome -> declaração
+        self.instantiated_functions: Dict[Tuple[str, Tuple[str, ...]], str] = {}  # (nome, tipos) -> nome_mangled
+        self.instantiated_classes: Dict[Tuple[str, Tuple[str, ...]], str] = {}  # (nome, tipos) -> nome_mangled
 
     # -------------------------
     # Entrada: gerar código LLVM IR para o programa
@@ -27,19 +34,43 @@ class LLVMCodeGenerator:
     def generate(self, program: Programa) -> str:
         # Separa declarações de funções, classes e instruções
         classes = [d for d in program.declaracoes if isinstance(d, DeclaracaoClasse)]
+        enums = [d for d in program.declaracoes if isinstance(d, DeclaracaoEnum)]
         funcoes = [d for d in program.declaracoes if isinstance(d, DeclaracaoFuncao)]
+        metodos: list[tuple[str, DeclaracaoMetodo]] = []
         instrucoes = [d for d in program.declaracoes if not isinstance(d, (DeclaracaoFuncao, DeclaracaoClasse))]
         
-        # Registra todas as classes primeiro
+        # Separa classes/funções genéricas de não-genéricas
         for class_decl in classes:
-            self._register_class(class_decl)
+            if getattr(class_decl, 'type_params', None):
+                # Classe genérica: apenas registra para instanciação posterior
+                self.generic_classes[class_decl.nome] = class_decl
+            else:
+                # Classe normal: registra imediatamente
+                self._register_class(class_decl)
+            for m in getattr(class_decl, 'metodos', []) or []:
+                metodos.append((class_decl.nome, m))
+        
+        for enum_decl in enums:
+            # Registra enums para uso como constantes (i32)
+            self._register_enum(enum_decl)
+        
+        # Separa funções genéricas
+        for func_decl in funcoes:
+            if getattr(func_decl, 'type_params', None):
+                # Função genérica: apenas registra para instanciação posterior
+                self.generic_functions[func_decl.nome] = func_decl
+            else:
+                # Função normal: gera código imediatamente
+                self._gen_function(func_decl)
         
         # Verifica se existe uma função main() definida pelo usuário
         user_main = next((f for f in funcoes if f.nome == "main"), None)
         
-        # Gera todas as funções
-        for func_decl in funcoes:
-            self._gen_function(func_decl)
+        # Gera métodos primeiro (declaração disponível para funções que os chamam)
+        for class_name, metodo in metodos:
+            # Pula métodos de classes genéricas (serão gerados ao instanciar)
+            if class_name not in self.generic_classes:
+                self._gen_method(class_name, metodo)
         
         # Se não há main() definida, cria wrapper main()
         if user_main is None:
@@ -137,22 +168,28 @@ class LLVMCodeGenerator:
                     if isinstance(current_val.type, ir.PointerType) or isinstance(rhs_val.type, ir.PointerType):
                         raise TypeError(f"Operador composto '{node.operador}' não suportado entre tipos {current_val.type} e {rhs_val.type}")
                     
-                    # Realiza a operação
+                    # Promove/coerção: se um é double e outro int, converte int para double
+                    if isinstance(current_val.type, ir.DoubleType) and isinstance(rhs_val.type, ir.IntType):
+                        rhs_val = self.builder.sitofp(rhs_val, ir.DoubleType())
+                    elif isinstance(rhs_val.type, ir.DoubleType) and isinstance(current_val.type, ir.IntType):
+                        current_val = self.builder.sitofp(current_val, ir.DoubleType())
+
+                    # Realiza a operação respeitando tipo (int vs double)
                     if node.operador == '+=':
-                        new_val = self.builder.add(current_val, rhs_val)
+                        new_val = self.builder.fadd(current_val, rhs_val) if isinstance(current_val.type, ir.DoubleType) else self.builder.add(current_val, rhs_val)
                     elif node.operador == '-=':
-                        new_val = self.builder.sub(current_val, rhs_val)
+                        new_val = self.builder.fsub(current_val, rhs_val) if isinstance(current_val.type, ir.DoubleType) else self.builder.sub(current_val, rhs_val)
                     elif node.operador == '*=':
-                        new_val = self.builder.mul(current_val, rhs_val)
+                        new_val = self.builder.fmul(current_val, rhs_val) if isinstance(current_val.type, ir.DoubleType) else self.builder.mul(current_val, rhs_val)
                     elif node.operador == '/=':
-                        new_val = self.builder.sdiv(current_val, rhs_val)
+                        new_val = self.builder.fdiv(current_val, rhs_val) if isinstance(current_val.type, ir.DoubleType) else self.builder.sdiv(current_val, rhs_val)
                     
                     self.builder.store(new_val, self.symbols[name])
                 else:
                     # Atribuição simples: =
                     val = self._gen_expr(node.valor)
                     if name not in self.symbols:
-                        alloca = self.builder.alloca(val.type, name=name)
+                        alloca = self._entry_alloca(val.type, name=name)
                         self.symbols[name] = alloca
                     else:
                         # Se o valor é null (i8*) e a variável é de outro tipo de ponteiro, faz cast
@@ -161,16 +198,217 @@ class LLVMCodeGenerator:
                             if val.type != target_type:
                                 val = self.builder.bitcast(val, target_type)
                     self.builder.store(val, self.symbols[name])
+                    # Se criando mapa, registra metadados
+                    if isinstance(node.valor, CriacaoMapa):
+                        key_ty = self._type_from_name(node.valor.tipo_chave)
+                        self.maps[name] = {
+                            'key_ty': key_ty,
+                            'val_ty': self._type_from_name(node.valor.tipo_valor)
+                        }
             # Atribuição para elemento de array: alvo[indice] = valor
             elif isinstance(node.alvo, AcessoArray):
-                val = self._gen_expr(node.valor)
-                base_ptr = self._gen_expr(node.alvo.alvo)  # deve ser i32*
-                index_val = self._gen_expr(node.alvo.indice)
-                if not isinstance(index_val.type, ir.IntType):
-                    # força índice para i32
-                    index_val = self.builder.ptrtoint(index_val, ir.IntType(32)) if isinstance(index_val.type, ir.PointerType) else self.builder.trunc(index_val, ir.IntType(32))
-                elem_ptr = self.builder.gep(base_ptr, [index_val])
-                self.builder.store(val, elem_ptr)
+                # Set em array ou mapa
+                if isinstance(node.alvo.alvo, Variavel) and node.alvo.alvo.nome in self.maps:
+                    map_ptr = self._gen_expr(node.alvo.alvo)
+                    key_val = self._gen_expr(node.alvo.indice)
+                    val = self._gen_expr(node.valor)
+                    def gep_field(idx):
+                        return self.builder.gep(map_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), idx)])
+                    kptr = self.builder.load(gep_field(0))
+                    vptr = self.builder.load(gep_field(1))
+                    cap = self.builder.load(gep_field(2))
+                    size_ptr = gep_field(3)
+                    size = self.builder.load(size_ptr)
+                    # loop de busca
+                    i_alloc = self._entry_alloca(ir.IntType(32), name="_map_i")
+                    self.builder.store(ir.Constant(ir.IntType(32), 0), i_alloc)
+                    start_b = self.func.append_basic_block("map_set_start")
+                    body_b = self.func.append_basic_block("map_set_body")
+                    step_b = self.func.append_basic_block("map_set_step")
+                    end_b = self.func.append_basic_block("map_set_end")
+                    found_b = self.func.append_basic_block("map_set_found")
+                    insert_b = self.func.append_basic_block("map_set_insert")
+                    self.builder.branch(start_b)
+                    self.builder.position_at_end(start_b)
+                    i_val = self.builder.load(i_alloc)
+                    cond = self.builder.icmp_signed("<", i_val, size)
+                    self.builder.cbranch(cond, body_b, insert_b)
+                    self.builder.position_at_end(body_b)
+                    k_elemptr = self.builder.gep(kptr, [i_val])
+                    k_elem = self.builder.load(k_elemptr)
+                    # Comparação de chave por tipo
+                    if isinstance(k_elem.type, ir.IntType):
+                        # normaliza key_val para mesma largura
+                        if isinstance(key_val.type, ir.IntType) and key_val.type.width != k_elem.type.width:
+                            key_val = self.builder.zext(key_val, k_elem.type) if key_val.type.width < k_elem.type.width else self.builder.trunc(key_val, k_elem.type)
+                        elif isinstance(key_val.type, ir.DoubleType):
+                            key_val = self.builder.fptosi(key_val, k_elem.type)
+                        eq = self.builder.icmp_signed("==", k_elem, key_val)
+                    elif isinstance(k_elem.type, ir.DoubleType):
+                        if isinstance(key_val.type, ir.IntType):
+                            key_val = self.builder.sitofp(key_val, ir.DoubleType())
+                        eq = self.builder.fcmp_ordered("==", k_elem, key_val)
+                    elif isinstance(k_elem.type, ir.PointerType) and isinstance(k_elem.type.pointee, ir.LiteralStructType):
+                        # Chave é classe: tenta chamar método equals(self, other): bool
+                        class_name = None
+                        for name, (stype, _fmap) in self.classes.items():
+                            if stype == k_elem.type.pointee:
+                                class_name = name
+                                break
+                        if class_name is not None:
+                            equals_fn = self.module.globals.get(f"{class_name}_equals")
+                            if equals_fn is not None:
+                                # Garante tipos de ponteiro compatíveis
+                                lhs_ptr = k_elem
+                                rhs_ptr = key_val
+                                if lhs_ptr.type != equals_fn.function_type.args[0]:
+                                    # bitcast self
+                                    lhs_ptr = self.builder.bitcast(lhs_ptr, equals_fn.function_type.args[0])
+                                if rhs_ptr.type != equals_fn.function_type.args[1]:
+                                    rhs_ptr = self.builder.bitcast(rhs_ptr, equals_fn.function_type.args[1])
+                                eq_res = self.builder.call(equals_fn, [lhs_ptr, rhs_ptr])
+                                # equals retorna i1; usa diretamente
+                                eq = eq_res
+                            else:
+                                # Fallback: compara ponteiros
+                                eq = self.builder.icmp_unsigned("==", k_elem, key_val)
+                        else:
+                            eq = self.builder.icmp_unsigned("==", k_elem, key_val)
+                    elif isinstance(k_elem.type, ir.PointerType) and isinstance(k_elem.type.pointee, ir.IntType) and k_elem.type.pointee.width == 8:
+                        # Strings: usa strcmp
+                        strcmp_res = self._call_strcmp(k_elem, key_val)
+                        eq = self.builder.icmp_signed("==", strcmp_res, ir.Constant(ir.IntType(32), 0))
+                    else:
+                        # Fallback: compara ponteiro
+                        eq = self.builder.icmp_unsigned("==", k_elem, key_val)
+                    self.builder.cbranch(eq, found_b, step_b)
+                    self.builder.position_at_end(step_b)
+                    i_next = self.builder.add(i_val, ir.Constant(ir.IntType(32), 1))
+                    self.builder.store(i_next, i_alloc)
+                    self.builder.branch(start_b)
+                    self.builder.position_at_end(found_b)
+                    v_elemptr = self.builder.gep(vptr, [i_val])
+                    # ajuste tipo
+                    vty = v_elemptr.type.pointee
+                    if isinstance(vty, ir.DoubleType) and isinstance(val.type, ir.IntType):
+                        val = self.builder.sitofp(val, ir.DoubleType())
+                    elif isinstance(vty, ir.IntType) and isinstance(val.type, ir.DoubleType):
+                        val = self.builder.fptosi(val, vty)
+                    elif isinstance(vty, ir.IntType) and isinstance(val.type, ir.IntType) and vty.width != val.type.width:
+                        val = self.builder.zext(val, vty) if val.type.width < vty.width else self.builder.trunc(val, vty)
+                    elif isinstance(vty, ir.PointerType) and isinstance(val.type, ir.PointerType) and vty != val.type:
+                        val = self.builder.bitcast(val, vty)
+                    self.builder.store(val, v_elemptr)
+                    self.builder.branch(end_b)
+                    self.builder.position_at_end(insert_b)
+                    can_ins = self.builder.icmp_signed("<", size, cap)
+                    after_ins_b = self.func.append_basic_block("map_set_afterins")
+                    self.builder.cbranch(can_ins, after_ins_b, end_b)
+                    self.builder.position_at_end(after_ins_b)
+                    k_elemptr2 = self.builder.gep(kptr, [size])
+                    v_elemptr2 = self.builder.gep(vptr, [size])
+                    # Armazena a chave com normalização de tipo
+                    kty = k_elemptr2.type.pointee
+                    key_store = key_val
+                    if isinstance(kty, ir.IntType):
+                        if isinstance(key_store.type, ir.IntType) and key_store.type.width != kty.width:
+                            key_store = self.builder.zext(key_store, kty) if key_store.type.width < kty.width else self.builder.trunc(key_store, kty)
+                        elif isinstance(key_store.type, ir.DoubleType):
+                            key_store = self.builder.fptosi(key_store, kty)
+                    elif isinstance(kty, ir.DoubleType):
+                        if isinstance(key_store.type, ir.IntType):
+                            key_store = self.builder.sitofp(key_store, ir.DoubleType())
+                    elif isinstance(kty, ir.PointerType) and isinstance(kty.pointee, ir.IntType) and kty.pointee.width == 8:
+                        if not (isinstance(key_store.type, ir.PointerType) and isinstance(key_store.type.pointee, ir.IntType) and key_store.type.pointee.width == 8):
+                            key_store = self.builder.bitcast(key_store, ir.IntType(8).as_pointer())
+                    self.builder.store(key_store, k_elemptr2)
+                    # ajustar tipo para store
+                    vty2 = v_elemptr2.type.pointee
+                    val2 = val
+                    if isinstance(vty2, ir.DoubleType) and isinstance(val2.type, ir.IntType):
+                        val2 = self.builder.sitofp(val2, ir.DoubleType())
+                    elif isinstance(vty2, ir.IntType) and isinstance(val2.type, ir.DoubleType):
+                        val2 = self.builder.fptosi(val2, vty2)
+                    elif isinstance(vty2, ir.IntType) and isinstance(val2.type, ir.IntType) and vty2.width != val2.type.width:
+                        val2 = self.builder.zext(val2, vty2) if val2.type.width < vty2.width else self.builder.trunc(val2, vty2)
+                    elif isinstance(vty2, ir.PointerType) and isinstance(val2.type, ir.PointerType) and vty2 != val2.type:
+                        val2 = self.builder.bitcast(val2, vty2)
+                    self.builder.store(val2, v_elemptr2)
+                    size_inc = self.builder.add(size, ir.Constant(ir.IntType(32), 1))
+                    self.builder.store(size_inc, size_ptr)
+                    self.builder.branch(end_b)
+                    self.builder.position_at_end(end_b)
+                else:
+                    val = self._gen_expr(node.valor)
+                    base_ptr = self._gen_expr(node.alvo.alvo)  # elem*
+                    index_val = self._gen_expr(node.alvo.indice)
+                    if not isinstance(index_val.type, ir.IntType):
+                        index_val = self.builder.ptrtoint(index_val, ir.IntType(32)) if isinstance(index_val.type, ir.PointerType) else self.builder.trunc(index_val, ir.IntType(32))
+                    elem_ptr = self.builder.gep(base_ptr, [index_val])
+                    elem_ty = elem_ptr.type.pointee
+                    if isinstance(elem_ty, ir.IntType) and elem_ty.width == 1:
+                        if isinstance(val.type, ir.IntType) and val.type.width != 1:
+                            val = self.builder.icmp_signed("!=", val, ir.Constant(val.type, 0))
+                        elif isinstance(val.type, ir.DoubleType):
+                            val = self.builder.fcmp_ordered("!=", val, ir.Constant(val.type, 0.0))
+                    if isinstance(elem_ty, ir.DoubleType) and isinstance(val.type, ir.IntType):
+                        val = self.builder.sitofp(val, ir.DoubleType())
+                    elif isinstance(elem_ty, ir.IntType) and isinstance(val.type, ir.DoubleType):
+                        val = self.builder.fptosi(val, elem_ty)
+                    elif isinstance(elem_ty, ir.IntType) and isinstance(val.type, ir.IntType) and elem_ty.width != val.type.width:
+                        val = self.builder.zext(val, elem_ty) if val.type.width < elem_ty.width else self.builder.trunc(val, elem_ty)
+                    elif isinstance(elem_ty, ir.PointerType) and isinstance(val.type, ir.PointerType) and elem_ty != val.type:
+                        val = self.builder.bitcast(val, elem_ty)
+                    self.builder.store(val, elem_ptr)
+            # Atribuição para campo de classe: objeto.campo = valor ou composto
+            elif isinstance(node.alvo, AcessoCampo):
+                campo = node.alvo
+                obj_ptr = self._gen_expr(campo.alvo)  # ponteiro para struct
+                # Descobre classe
+                if not (isinstance(obj_ptr.type, ir.PointerType) and isinstance(obj_ptr.type.pointee, ir.LiteralStructType)):
+                    raise TypeError("Acesso a campo em objeto não-struct")
+                class_name = None
+                for name, (stype, fmap) in self.classes.items():
+                    if stype == obj_ptr.type.pointee:
+                        class_name = name
+                        field_map = fmap
+                        break
+                if class_name is None:
+                    raise NameError("Classe do objeto não encontrada para atribuição de campo")
+                if campo.campo not in field_map:
+                    raise AttributeError(f"Campo '{campo.campo}' inexistente em classe '{class_name}'")
+                field_idx = field_map[campo.campo]
+                field_ptr = self.builder.gep(obj_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), field_idx)])
+                if node.operador in ('+=','-=','*=','/='):
+                    current_val = self.builder.load(field_ptr)
+                    rhs_val = self._gen_expr(node.valor)
+                    # Converte tipos simples se necessário (int/double)
+                    if isinstance(current_val.type, ir.DoubleType) and isinstance(rhs_val.type, ir.IntType):
+                        rhs_val = self.builder.sitofp(rhs_val, ir.DoubleType())
+                    elif isinstance(rhs_val.type, ir.DoubleType) and isinstance(current_val.type, ir.IntType):
+                        current_val = self.builder.sitofp(current_val, ir.DoubleType())
+                    if node.operador == '+=':
+                        new_val = self.builder.add(current_val, rhs_val) if not isinstance(current_val.type, ir.DoubleType) else self.builder.fadd(current_val, rhs_val)
+                    elif node.operador == '-=':
+                        new_val = self.builder.sub(current_val, rhs_val) if not isinstance(current_val.type, ir.DoubleType) else self.builder.fsub(current_val, rhs_val)
+                    elif node.operador == '*=':
+                        new_val = self.builder.mul(current_val, rhs_val) if not isinstance(current_val.type, ir.DoubleType) else self.builder.fmul(current_val, rhs_val)
+                    elif node.operador == '/=':
+                        new_val = self.builder.sdiv(current_val, rhs_val) if not isinstance(current_val.type, ir.DoubleType) else self.builder.fdiv(current_val, rhs_val)
+                    self.builder.store(new_val, field_ptr)
+                else:
+                    val = self._gen_expr(node.valor)
+                    # Ajusta tipo se necessário
+                    current_ty = field_ptr.type.pointee
+                    if isinstance(current_ty, ir.DoubleType) and isinstance(val.type, ir.IntType):
+                        val = self.builder.sitofp(val, ir.DoubleType())
+                    elif isinstance(current_ty, ir.IntType) and current_ty.width == 32 and isinstance(val.type, ir.IntType) and val.type.width != 32:
+                        # Normaliza para i32
+                        if val.type.width < 32:
+                            val = self.builder.zext(val, ir.IntType(32))
+                        else:
+                            val = self.builder.trunc(val, ir.IntType(32))
+                    self.builder.store(val, field_ptr)
             else:
                 raise NotImplementedError("Atribuição para alvo não suportado")
 
@@ -196,11 +434,24 @@ class LLVMCodeGenerator:
                 elif isinstance(val.type, ir.DoubleType):
                     fmt = self._gen_string("%f")
                     self.builder.call(printf, [fmt, val])
+                elif isinstance(val.type, ir.IntType) and val.type.width == 8:
+                    # imprime byte como caractere
+                    fmt = self._gen_string("%c")
+                    promoted = self.builder.zext(val, ir.IntType(32))
+                    self.builder.call(printf, [fmt, promoted])
                 elif isinstance(val.type, ir.IntType) and val.type.width == 1:
                     fmt = self._gen_string("%d")
-                    self.builder.call(printf, [fmt, val])
+                    # promove para i32 para variádico
+                    promoted = self.builder.zext(val, ir.IntType(32))
+                    self.builder.call(printf, [fmt, promoted])
                 else:
                     fmt = self._gen_string("%d")
+                    # Se inteiro não-i32, promove/trunca para i32
+                    if isinstance(val.type, ir.IntType) and val.type.width != 32:
+                        if val.type.width < 32:
+                            val = self.builder.zext(val, ir.IntType(32))
+                        else:
+                            val = self.builder.trunc(val, ir.IntType(32))
                     self.builder.call(printf, [fmt, val])
             # Nova linha ao final
             self.builder.call(printf, [self._gen_string("\n")])
@@ -223,6 +474,8 @@ class LLVMCodeGenerator:
 
         elif isinstance(node, InstrucaoLoopFor):
             self._gen_for(node)
+        elif isinstance(node, InstrucaoLoopForEach):
+            self._gen_foreach(node)
 
         elif isinstance(node, DeclaracaoFuncao):
             self._gen_function(node)
@@ -252,6 +505,10 @@ class LLVMCodeGenerator:
     # -------------------------
     def _gen_expr(self, expr: ASTNode):
         if isinstance(expr, Literal):
+            # Importante: bool antes de int (bool é subclass de int em Python)
+            if isinstance(expr.valor, bool):
+                # true -> 1, false -> 0 (i1)
+                return ir.Constant(ir.IntType(1), int(expr.valor))
             if isinstance(expr.valor, int):
                 return ir.Constant(ir.IntType(32), expr.valor)
             elif isinstance(expr.valor, float):
@@ -259,9 +516,6 @@ class LLVMCodeGenerator:
             elif isinstance(expr.valor, str):
                 # string ou char
                 return self._gen_string(expr.valor)
-            elif isinstance(expr.valor, bool):
-                # true -> 1, false -> 0
-                return ir.Constant(ir.IntType(1), int(expr.valor))
             elif expr.valor is None:
                 # null pointer
                 return ir.Constant(ir.IntType(8).as_pointer(), None)
@@ -416,8 +670,20 @@ class LLVMCodeGenerator:
             # suporta funções com Variavel como nome
             fn_name = expr.nome.nome if isinstance(expr.nome, Variavel) else expr.nome
             
+            # Verifica se é uma função genérica sendo chamada com argumentos de tipo
+            type_args = getattr(expr, 'type_args', None)
+            if type_args and isinstance(fn_name, str):
+                # Instancia a função genérica para esses tipos
+                mangled_name = self._instantiate_generic_function(fn_name, tuple(type_args))
+                # Chama a versão concreta
+                func = self.module.globals.get(mangled_name)
+                if func is None:
+                    raise NameError(f"Função genérica instanciada '{mangled_name}' não encontrada")
+                args = [self._gen_expr(a) for a in (expr.argumentos or [])]
+                return self.builder.call(func, args)
+            
             # Verifica se é uma criação de classe
-            if fn_name in self.classes:
+            if isinstance(fn_name, str) and fn_name in self.classes:
                 # Converte para CriacaoClasse
                 criacao = CriacaoClasse(fn_name, expr.argumentos or [])
                 return self._gen_expr(criacao)
@@ -456,14 +722,94 @@ class LLVMCodeGenerator:
                 self.builder.store(ir.Constant(ir.IntType(8), 0), dest_end)
                 return dest
             
+            # Suporte a chamada de método: alvo.metodo(args)
+            if isinstance(expr.nome, AcessoCampo):
+                alvo_ptr = self._gen_expr(expr.nome.alvo)
+                if isinstance(alvo_ptr.type, ir.PointerType) and isinstance(alvo_ptr.type.pointee, ir.LiteralStructType):
+                    class_name = None
+                    for name, (stype, _field_map) in self.classes.items():
+                        if stype == alvo_ptr.type.pointee:
+                            class_name = name
+                            break
+                    if class_name is None:
+                        raise NameError("Classe do alvo não identificada para chamada de método")
+                    mangled = f"{class_name}_{expr.nome.campo}"
+                    func = self.module.globals.get(mangled)
+                    if func is None:
+                        raise NameError(f"Método '{expr.nome.campo}' de '{class_name}' não declarado")
+                    call_args = [alvo_ptr] + [self._gen_expr(a) for a in (expr.argumentos or [])]
+                    return self.builder.call(func, call_args)
+
             func = self.module.globals.get(fn_name)
             if func is None:
                 raise NameError(f"Função '{fn_name}' não declarada")
             args = [self._gen_expr(a) for a in (expr.argumentos or [])]
             return self.builder.call(func, args)
 
+        elif isinstance(expr, CriacaoArray2D):
+            # new T[m][n]: array de pointers para T[]
+            m_val = self._gen_expr(expr.linhas)
+            n_val = self._gen_expr(expr.colunas)
+            # outer: elementos são ponteiros para inner elem
+            inner_elem_ty = self._type_from_name(expr.tipo)
+            if isinstance(inner_elem_ty, ir.IntType) and inner_elem_ty.width == 1:
+                pass
+            outer_elem_ty = inner_elem_ty.as_pointer()
+            # Aloca outer como array de ponteiros
+            # Reimplementa com elem ponteiro e usa m (expr.linhas) como tamanho
+            size_val = m_val
+            # i64
+            if isinstance(size_val.type, ir.IntType) and size_val.type.width < 64:
+                size_i64 = self.builder.sext(size_val, ir.IntType(64))
+            elif isinstance(size_val.type, ir.IntType) and size_val.type.width > 64:
+                size_i64 = self.builder.trunc(size_val, ir.IntType(64))
+            else:
+                size_i64 = size_val if isinstance(size_val.type, ir.IntType) and size_val.type.width == 64 else self.builder.fptosi(size_val, ir.IntType(64))
+            # ponteiro tem 8 bytes
+            elem_size = ir.Constant(ir.IntType(64), 8)
+            data_bytes = self.builder.mul(size_i64, elem_size)
+            header_bytes = ir.Constant(ir.IntType(64), 8)
+            total_bytes = self.builder.add(header_bytes, data_bytes)
+            malloc = self._get_malloc()
+            raw_ptr = self.builder.call(malloc, [total_bytes])
+            len_ptr = self.builder.bitcast(raw_ptr, ir.IntType(64).as_pointer())
+            self.builder.store(size_i64, len_ptr)
+            data_i8 = self.builder.gep(raw_ptr, [ir.Constant(ir.IntType(32), 8)])
+            outer_ptr = self.builder.bitcast(data_i8, outer_elem_ty.as_pointer())  # (T*)*
+
+            # Loop i=0..m-1: outer[i] = new T[n]
+            i_alloc = self._entry_alloca(ir.IntType(32), name="_i_rows")
+            self.builder.store(ir.Constant(ir.IntType(32), 0), i_alloc)
+            start_b = self.func.append_basic_block("rows_start")
+            body_b = self.func.append_basic_block("rows_body")
+            step_b = self.func.append_basic_block("rows_step")
+            end_b = self.func.append_basic_block("rows_end")
+            self.builder.branch(start_b)
+            self.builder.position_at_end(start_b)
+            i_val = self.builder.load(i_alloc)
+            m32 = size_val if (isinstance(size_val.type, ir.IntType) and size_val.type.width == 32) else self.builder.trunc(size_i64, ir.IntType(32))
+            cond = self.builder.icmp_signed("<", i_val, m32)
+            self.builder.cbranch(cond, body_b, end_b)
+
+            self.builder.position_at_end(body_b)
+            # cria inner array new T[n]
+            inner_arr = CriacaoArray(expr.tipo, expr.colunas)
+            inner_ptr = self._gen_expr(inner_arr)
+            elem_ptr = self.builder.gep(outer_ptr, [i_val])
+            # store pointer
+            self.builder.store(inner_ptr, elem_ptr)
+            self.builder.branch(step_b)
+
+            self.builder.position_at_end(step_b)
+            i_next = self.builder.add(i_val, ir.Constant(ir.IntType(32), 1))
+            self.builder.store(i_next, i_alloc)
+            self.builder.branch(start_b)
+
+            self.builder.position_at_end(end_b)
+            return outer_ptr
+
         elif isinstance(expr, CriacaoArray):
-            # Cria array de int32 com tamanho dinâmico via malloc
+            # Cria array tipado com header i64 (length) e dados consecutivos
             size_val = self._gen_expr(expr.tamanho)
             # garante i64 para malloc size
             if isinstance(size_val.type, ir.IntType) and size_val.type.width < 64:
@@ -471,11 +817,21 @@ class LLVMCodeGenerator:
             elif isinstance(size_val.type, ir.IntType) and size_val.type.width > 64:
                 size_i64 = self.builder.trunc(size_val, ir.IntType(64))
             else:
-                # convert pointers/doubles de forma simples
                 size_i64 = size_val if isinstance(size_val.type, ir.IntType) and size_val.type.width == 64 else self.builder.ptrtoint(size_val, ir.IntType(64)) if isinstance(size_val.type, ir.PointerType) else self.builder.fptosi(size_val, ir.IntType(64))
 
-            # bytes = 8(header length) + size * 4
-            elem_size = ir.Constant(ir.IntType(64), 4)
+            elem_ty = self._type_from_name(expr.tipo)
+            # tamanho do elemento
+            if isinstance(elem_ty, ir.IntType):
+                elem_bytes = elem_ty.width // 8 if elem_ty.width >= 8 else 1
+            elif isinstance(elem_ty, ir.DoubleType):
+                elem_bytes = 8
+            elif isinstance(elem_ty, ir.FloatType):
+                elem_bytes = 4
+            elif isinstance(elem_ty, ir.PointerType):
+                elem_bytes = 8
+            else:
+                elem_bytes = 8
+            elem_size = ir.Constant(ir.IntType(64), elem_bytes)
             data_bytes = self.builder.mul(size_i64, elem_size)
             header_bytes = ir.Constant(ir.IntType(64), 8)
             total_bytes = self.builder.add(header_bytes, data_bytes)
@@ -487,13 +843,248 @@ class LLVMCodeGenerator:
             len_ptr = self.builder.bitcast(raw_ptr, ir.IntType(64).as_pointer())
             self.builder.store(size_i64, len_ptr)
 
-            # Data pointer é raw_ptr + 8, como i32*
+            # Data pointer é raw_ptr + 8, como elem_ty*
             data_i8 = self.builder.gep(raw_ptr, [ir.Constant(ir.IntType(32), 8)])
-            data_i32 = self.builder.bitcast(data_i8, ir.IntType(32).as_pointer())
-            return data_i32
+            data_ptr = self.builder.bitcast(data_i8, elem_ty.as_pointer())
+            return data_ptr
+
+        elif isinstance(expr, CriacaoMapa):
+            # struct Map { K* keys; V* values; i32 capacity; i32 size; }
+            # Usa mapeamento padrão de tipos para chave/valor
+            key_elem_ty = self._type_from_name(expr.tipo_chave)
+            val_ty = self._type_from_name(expr.tipo_valor)
+
+            # Ponteiro para o array de chaves: K*
+            keys_arr_ptr_ty = key_elem_ty.as_pointer()
+
+            map_struct = ir.LiteralStructType([keys_arr_ptr_ty, val_ty.as_pointer(), ir.IntType(32), ir.IntType(32)])
+            malloc = self._get_malloc()
+            raw = self.builder.call(malloc, [ir.Constant(ir.IntType(64), 32)])
+            map_ptr = self.builder.bitcast(raw, map_struct.as_pointer())
+
+            # capacidade
+            cap32 = self._gen_expr(expr.capacidade)
+            if not (isinstance(cap32.type, ir.IntType) and cap32.type.width == 32):
+                cap32 = self.builder.trunc(cap32, ir.IntType(32)) if isinstance(cap32.type, ir.IntType) else self.builder.fptosi(cap32, ir.IntType(32))
+
+            # aloca arrays keys e values: calcula bytes por elemento
+            if isinstance(key_elem_ty, ir.IntType):
+                k_elem_bytes = ir.Constant(ir.IntType(64), max(1, key_elem_ty.width // 8))
+            elif isinstance(key_elem_ty, ir.DoubleType):
+                k_elem_bytes = ir.Constant(ir.IntType(64), 8)
+            elif isinstance(key_elem_ty, ir.FloatType):
+                k_elem_bytes = ir.Constant(ir.IntType(64), 4)
+            elif isinstance(key_elem_ty, ir.PointerType):
+                k_elem_bytes = ir.Constant(ir.IntType(64), 8)
+            else:
+                k_elem_bytes = ir.Constant(ir.IntType(64), 8)
+            key_bytes = self.builder.mul(self.builder.sext(cap32, ir.IntType(64)), k_elem_bytes)
+            kraw = self.builder.call(malloc, [key_bytes])
+            kptr = self.builder.bitcast(kraw, key_elem_ty.as_pointer())
+
+            # valores
+            if isinstance(val_ty, ir.IntType):
+                v_elem_bytes = ir.Constant(ir.IntType(64), max(1, val_ty.width // 8))
+            elif isinstance(val_ty, ir.DoubleType):
+                v_elem_bytes = ir.Constant(ir.IntType(64), 8)
+            elif isinstance(val_ty, ir.FloatType):
+                v_elem_bytes = ir.Constant(ir.IntType(64), 4)
+            elif isinstance(val_ty, ir.PointerType):
+                v_elem_bytes = ir.Constant(ir.IntType(64), 8)
+            else:
+                v_elem_bytes = ir.Constant(ir.IntType(64), 8)
+            v_bytes = self.builder.mul(self.builder.sext(cap32, ir.IntType(64)), v_elem_bytes)
+            vraw = self.builder.call(malloc, [v_bytes])
+            vptr = self.builder.bitcast(vraw, val_ty.as_pointer())
+
+            # campos
+            def gep_field(idx):
+                return self.builder.gep(map_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), idx)])
+            self.builder.store(kptr, gep_field(0))
+            self.builder.store(vptr, gep_field(1))
+            self.builder.store(cap32, gep_field(2))
+            self.builder.store(ir.Constant(ir.IntType(32), 0), gep_field(3))
+            return map_ptr
 
         elif isinstance(expr, AcessoArray):
-            base_ptr = self._gen_expr(expr.alvo)  # i32*
+            # Mapa: m[key]
+            if isinstance(expr.alvo, Variavel) and expr.alvo.nome in self.maps:
+                map_ptr = self._gen_expr(expr.alvo)
+                key_val = self._gen_expr(expr.indice)
+                # Normaliza chave conforme tipo do mapa
+                # Busca tipo da chave pelo metadado
+                meta = None
+                for var_name, types in self.maps.items():
+                    if var_name == expr.alvo.nome:
+                        meta = types
+                        break
+                if meta is not None:
+                    kty = meta['key_ty']
+                    if isinstance(kty, ir.IntType):
+                        if isinstance(key_val.type, ir.IntType) and key_val.type.width != kty.width:
+                            key_val = self.builder.zext(key_val, kty) if key_val.type.width < kty.width else self.builder.trunc(key_val, kty)
+                        elif isinstance(key_val.type, ir.DoubleType):
+                            key_val = self.builder.fptosi(key_val, kty)
+                    elif isinstance(kty, ir.DoubleType):
+                        if isinstance(key_val.type, ir.IntType):
+                            key_val = self.builder.sitofp(key_val, ir.DoubleType())
+                    else:
+                        # espera i8*; se for string literal já é i8*
+                        if not (isinstance(key_val.type, ir.PointerType) and isinstance(key_val.type.pointee, ir.IntType) and key_val.type.pointee.width == 8):
+                            key_val = self.builder.bitcast(key_val, ir.IntType(8).as_pointer())
+                def gep_field(idx):
+                    return self.builder.gep(map_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), idx)])
+                kptr = self.builder.load(gep_field(0))
+                vptr = self.builder.load(gep_field(1))
+                size = self.builder.load(gep_field(3))
+                i_alloc = self._entry_alloca(ir.IntType(32), name="_map_i_get")
+                self.builder.store(ir.Constant(ir.IntType(32), 0), i_alloc)
+                start_b = self.func.append_basic_block("map_get_start")
+                body_b = self.func.append_basic_block("map_get_body")
+                step_b = self.func.append_basic_block("map_get_step")
+                end_b = self.func.append_basic_block("map_get_end")
+                found_b = self.func.append_basic_block("map_get_found")
+                self.builder.branch(start_b)
+                self.builder.position_at_end(start_b)
+                i_val = self.builder.load(i_alloc)
+                cond = self.builder.icmp_signed("<", i_val, size)
+                self.builder.cbranch(cond, body_b, end_b)
+                self.builder.position_at_end(body_b)
+                k_elemptr = self.builder.gep(kptr, [i_val])
+                k_elem = self.builder.load(k_elemptr)
+                # Comparação por tipo
+                if isinstance(k_elem.type, ir.IntType):
+                    eq = self.builder.icmp_signed("==", k_elem, key_val)
+                elif isinstance(k_elem.type, ir.DoubleType):
+                    eq = self.builder.fcmp_ordered("==", k_elem, key_val)
+                elif isinstance(k_elem.type, ir.PointerType) and isinstance(k_elem.type.pointee, ir.LiteralStructType):
+                    # Chave é classe: tenta método equals
+                    class_name = None
+                    for name, (stype, _fmap) in self.classes.items():
+                        if stype == k_elem.type.pointee:
+                            class_name = name
+                            break
+                    if class_name is not None:
+                        equals_fn = self.module.globals.get(f"{class_name}_equals")
+                        if equals_fn is not None:
+                            lhs_ptr = k_elem
+                            rhs_ptr = key_val
+                            if lhs_ptr.type != equals_fn.function_type.args[0]:
+                                lhs_ptr = self.builder.bitcast(lhs_ptr, equals_fn.function_type.args[0])
+                            if rhs_ptr.type != equals_fn.function_type.args[1]:
+                                rhs_ptr = self.builder.bitcast(rhs_ptr, equals_fn.function_type.args[1])
+                            eq = self.builder.call(equals_fn, [lhs_ptr, rhs_ptr])
+                        else:
+                            eq = self.builder.icmp_unsigned("==", k_elem, key_val)
+                    else:
+                        eq = self.builder.icmp_unsigned("==", k_elem, key_val)
+                elif isinstance(k_elem.type, ir.PointerType) and isinstance(k_elem.type.pointee, ir.IntType) and k_elem.type.pointee.width == 8:
+                    strcmp_res = self._call_strcmp(k_elem, key_val)
+                    eq = self.builder.icmp_signed("==", strcmp_res, ir.Constant(ir.IntType(32), 0))
+                else:
+                    eq = self.builder.icmp_unsigned("==", k_elem, key_val)
+                self.builder.cbranch(eq, found_b, step_b)
+                self.builder.position_at_end(step_b)
+                i_next = self.builder.add(i_val, ir.Constant(ir.IntType(32), 1))
+                self.builder.store(i_next, i_alloc)
+                self.builder.branch(start_b)
+                self.builder.position_at_end(found_b)
+                v_elemptr = self.builder.gep(vptr, [i_val])
+                val = self.builder.load(v_elemptr)
+                self.builder.branch(end_b)
+                self.builder.position_at_end(end_b)
+                phi = self.builder.phi(val.type)
+                default_val = ir.Constant(val.type, 0) if isinstance(val.type, ir.IntType) or isinstance(val.type, ir.DoubleType) else ir.Constant(val.type, None) if isinstance(val.type, ir.PointerType) else ir.Constant(val.type, 0)
+                phi.add_incoming(default_val, start_b)
+                phi.add_incoming(val, found_b)
+                return phi
+
+            base_ptr = self._gen_expr(expr.alvo)  # elem*
+            # Acesso a tupla por índice: se alvo é struct literal, usa GEP no struct
+            if isinstance(base_ptr.type, ir.PointerType) and isinstance(base_ptr.type.pointee, ir.LiteralStructType):
+                index_val = self._gen_expr(expr.indice)
+                if not isinstance(index_val.type, ir.IntType):
+                    index_val = self.builder.trunc(index_val, ir.IntType(32)) if isinstance(index_val.type, ir.IntType) else self.builder.fptosi(index_val, ir.IntType(32))
+                field_ptr = self.builder.gep(base_ptr, [ir.Constant(ir.IntType(32), 0), index_val])
+                return self.builder.load(field_ptr)
+            # Slicing: indice é range
+            if isinstance(expr.indice, LiteralRange) or (isinstance(expr.indice, ExpressaoBinaria) and expr.indice.operador == ".."):
+                # Calcula start e end em i32
+                if isinstance(expr.indice, LiteralRange):
+                    start_val = self._gen_expr(expr.indice.inicio)
+                    end_val = self._gen_expr(expr.indice.fim)
+                else:
+                    start_val = self._gen_expr(expr.indice.esquerda)
+                    end_val = self._gen_expr(expr.indice.direita)
+                # Normaliza para i32
+                if not (isinstance(start_val.type, ir.IntType) and start_val.type.width == 32):
+                    start_val = self.builder.trunc(start_val, ir.IntType(32)) if isinstance(start_val.type, ir.IntType) else self.builder.fptosi(start_val, ir.IntType(32))
+                if not (isinstance(end_val.type, ir.IntType) and end_val.type.width == 32):
+                    end_val = self.builder.trunc(end_val, ir.IntType(32)) if isinstance(end_val.type, ir.IntType) else self.builder.fptosi(end_val, ir.IntType(32))
+
+                # length do array fonte
+                i8ptr = self.builder.bitcast(base_ptr, ir.IntType(8).as_pointer())
+                base_i8 = self.builder.gep(i8ptr, [ir.Constant(ir.IntType(32), -8)])
+                len_ptr = self.builder.bitcast(base_i8, ir.IntType(64).as_pointer())
+                n64 = self.builder.load(len_ptr)
+                n = self.builder.trunc(n64, ir.IntType(32))
+
+                # clamp start/end: start = max(0, min(start, n)), end = max(0, min(end, n))
+                zero = ir.Constant(ir.IntType(32), 0)
+                # min(start, n)
+                cmp_sn = self.builder.icmp_signed("<", start_val, n)
+                start_min = self.builder.select(cmp_sn, start_val, n)
+                # max(0, start_min)
+                cmp_s0 = self.builder.icmp_signed("<", start_min, zero)
+                start_cl = self.builder.select(cmp_s0, zero, start_min)
+
+                cmp_en = self.builder.icmp_signed("<", end_val, n)
+                end_min = self.builder.select(cmp_en, end_val, n)
+                cmp_e0 = self.builder.icmp_signed("<", end_min, zero)
+                end_cl = self.builder.select(cmp_e0, zero, end_min)
+
+                # len = max(0, end - start)
+                diff = self.builder.sub(end_cl, start_cl)
+                cmp_d0 = self.builder.icmp_signed("<", diff, zero)
+                slice_len = self.builder.select(cmp_d0, zero, diff)
+
+                # Aloca novo array com mesmo tipo de elemento
+                elem_ty = base_ptr.type.pointee
+                # bytes por elemento
+                if isinstance(elem_ty, ir.IntType):
+                    elem_bytes = elem_ty.width // 8 if elem_ty.width >= 8 else 1
+                elif isinstance(elem_ty, ir.DoubleType):
+                    elem_bytes = 8
+                elif isinstance(elem_ty, ir.FloatType):
+                    elem_bytes = 4
+                elif isinstance(elem_ty, ir.PointerType):
+                    elem_bytes = 8
+                else:
+                    elem_bytes = 8
+                elem_sz64 = ir.Constant(ir.IntType(64), elem_bytes)
+                slice_len64 = self.builder.sext(slice_len, ir.IntType(64))
+                data_bytes = self.builder.mul(slice_len64, elem_sz64)
+                header_bytes = ir.Constant(ir.IntType(64), 8)
+                total_bytes = self.builder.add(header_bytes, data_bytes)
+
+                malloc = self._get_malloc()
+                raw_ptr = self.builder.call(malloc, [total_bytes])  # i8*
+                # grava header
+                len_out_ptr = self.builder.bitcast(raw_ptr, ir.IntType(64).as_pointer())
+                self.builder.store(slice_len64, len_out_ptr)
+                # dest data ptr
+                dest_i8 = self.builder.gep(raw_ptr, [ir.Constant(ir.IntType(32), 8)])
+                dest_ptr = self.builder.bitcast(dest_i8, elem_ty.as_pointer())
+
+                # src offset = base_ptr + start_cl
+                src_elem_ptr = self.builder.gep(base_ptr, [start_cl])
+                # memcpy(dest, src, bytes)
+                memcpy = self._get_memcpy()
+                src_i8 = self.builder.bitcast(src_elem_ptr, ir.IntType(8).as_pointer())
+                _ = self.builder.call(memcpy, [dest_i8, src_i8, data_bytes])
+                return dest_ptr
+
+            # Acesso simples por índice
             index_val = self._gen_expr(expr.indice)
             if not isinstance(index_val.type, ir.IntType):
                 index_val = self.builder.ptrtoint(index_val, ir.IntType(32)) if isinstance(index_val.type, ir.PointerType) else self.builder.trunc(index_val, ir.IntType(32))
@@ -529,12 +1120,44 @@ class LLVMCodeGenerator:
                 self.builder.store(val, elem_ptr)
             return arr_ptr
 
+        elif isinstance(expr, LiteralTuple):
+            # Representa tupla como struct alocado e retorna ponteiro
+            elems = [self._gen_expr(e) for e in (expr.elementos or [])]
+            elem_types = [v.type for v in elems]
+            struct_ty = ir.LiteralStructType(elem_types)
+            malloc = self._get_malloc()
+            total_size = 0
+            for t in elem_types:
+                if isinstance(t, ir.IntType):
+                    total_size += max(1, t.width // 8)
+                elif isinstance(t, ir.DoubleType):
+                    total_size += 8
+                elif isinstance(t, ir.FloatType):
+                    total_size += 4
+                elif isinstance(t, ir.PointerType):
+                    total_size += 8
+                else:
+                    total_size += 8
+            raw = self.builder.call(malloc, [ir.Constant(ir.IntType(64), total_size)])
+            tup_ptr = self.builder.bitcast(raw, struct_ty.as_pointer())
+            for idx, val in enumerate(elems):
+                field_ptr = self.builder.gep(tup_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), idx)])
+                self.builder.store(val, field_ptr)
+            return tup_ptr
+
         elif isinstance(expr, CriacaoClasse):
             # Cria instância de classe: aloca struct e inicializa
-            if expr.classe not in self.classes:
-                raise NameError(f"Classe '{expr.classe}' não declarada")
+            class_name = expr.classe
+            type_args = getattr(expr, 'type_args', None)
             
-            struct_type, field_map = self.classes[expr.classe]
+            # Se tem argumentos de tipo, instancia a classe genérica
+            if type_args:
+                class_name = self._instantiate_generic_class(expr.classe, tuple(type_args))
+            
+            if class_name not in self.classes:
+                raise NameError(f"Classe '{class_name}' não declarada")
+            
+            struct_type, field_map = self.classes[class_name]
             malloc = self._get_malloc()
             
             # Calcula tamanho do struct (soma dos tamanhos dos campos)
@@ -567,6 +1190,13 @@ class LLVMCodeGenerator:
             return obj_ptr
 
         elif isinstance(expr, AcessoCampo):
+            # Enum: Cor.Verde -> constante i32
+            if isinstance(expr.alvo, Variavel) and hasattr(self, 'enums') and expr.alvo.nome in self.enums:
+                enum_map = self.enums[expr.alvo.nome]
+                if expr.campo in enum_map:
+                    return ir.Constant(ir.IntType(32), enum_map[expr.campo])
+                raise AttributeError(f"Membro '{expr.campo}' inexistente no enum '{expr.alvo.nome}'")
+
             # Acesso a campo: obj.campo
             obj_val = self._gen_expr(expr.alvo)
 
@@ -745,6 +1375,287 @@ class LLVMCodeGenerator:
 
         self.builder.position_at_end(end_block)
 
+    def _gen_foreach(self, node: InstrucaoLoopForEach):
+        # Suporta range a..b e arrays (i32*)
+        iterable = node.iterable
+        # Range literal
+        if isinstance(iterable, LiteralRange) or (isinstance(iterable, ExpressaoBinaria) and iterable.operador == ".."):
+            # obtém início e fim
+            if isinstance(iterable, LiteralRange):
+                start_val = self._gen_expr(iterable.inicio)
+                end_val = self._gen_expr(iterable.fim)
+            else:
+                start_val = self._gen_expr(iterable.esquerda)
+                end_val = self._gen_expr(iterable.direita)
+            # Normaliza para i32
+            if not (isinstance(start_val.type, ir.IntType) and start_val.type.width == 32):
+                start_val = self.builder.trunc(start_val, ir.IntType(32)) if isinstance(start_val.type, ir.IntType) else self.builder.fptosi(start_val, ir.IntType(32))
+            if not (isinstance(end_val.type, ir.IntType) and end_val.type.width == 32):
+                end_val = self.builder.trunc(end_val, ir.IntType(32)) if isinstance(end_val.type, ir.IntType) else self.builder.fptosi(end_val, ir.IntType(32))
+
+            # i = start
+            i_alloc = self.builder.alloca(ir.IntType(32), name="_it_i")
+            self.builder.store(start_val, i_alloc)
+            # variável iterada
+            iter_alloc = self.builder.alloca(ir.IntType(32), name=node.iter_var)
+
+            start_block = self.func.append_basic_block("foreach_start")
+            body_block = self.func.append_basic_block("foreach_body")
+            step_block = self.func.append_basic_block("foreach_step")
+            end_block = self.func.append_basic_block("foreach_end")
+
+            self.builder.branch(start_block)
+            self.builder.position_at_end(start_block)
+            i_val = self.builder.load(i_alloc)
+            cond = self.builder.icmp_signed("<=", i_val, end_val)
+            self.builder.cbranch(cond, body_block, end_block)
+
+            # Corpo
+            self.builder.position_at_end(body_block)
+            # iter_var = i
+            self.builder.store(i_val, iter_alloc)
+            # Disponibiliza iter_var em symbols
+            self.symbols[node.iter_var] = iter_alloc
+            for s in node.corpo or []:
+                self._gen_stmt(s)
+                if self.builder.block.is_terminated:
+                    break
+            if not self.builder.block.is_terminated:
+                self.builder.branch(step_block)
+
+            # Step: i += 1
+            self.builder.position_at_end(step_block)
+            i_val2 = self.builder.load(i_alloc)
+            i_next = self.builder.add(i_val2, ir.Constant(ir.IntType(32), 1))
+            self.builder.store(i_next, i_alloc)
+            if not self.builder.block.is_terminated:
+                self.builder.branch(start_block)
+
+            self.builder.position_at_end(end_block)
+            return
+
+        # Strings (i8*)
+        str_ptr = self._gen_expr(iterable)
+        if isinstance(str_ptr.type, ir.PointerType) and isinstance(str_ptr.type.pointee, ir.IntType) and str_ptr.type.pointee.width == 8:
+            strlen = self._get_strlen()
+            n64 = self.builder.call(strlen, [str_ptr])
+            n = self.builder.trunc(n64, ir.IntType(32))
+
+            idx_alloc = self.builder.alloca(ir.IntType(32), name="_it_idx")
+            self.builder.store(ir.Constant(ir.IntType(32), 0), idx_alloc)
+            ch_alloc = self.builder.alloca(ir.IntType(8), name=node.iter_var)
+            self.symbols[node.iter_var] = ch_alloc
+
+            start_block = self.func.append_basic_block("foreach_str_start")
+            body_block = self.func.append_basic_block("foreach_str_body")
+            step_block = self.func.append_basic_block("foreach_str_step")
+            end_block = self.func.append_basic_block("foreach_str_end")
+
+            self.builder.branch(start_block)
+            self.builder.position_at_end(start_block)
+            idx = self.builder.load(idx_alloc)
+            cond = self.builder.icmp_signed("<", idx, n)
+            self.builder.cbranch(cond, body_block, end_block)
+
+            self.builder.position_at_end(body_block)
+            ch_ptr = self.builder.gep(str_ptr, [idx])
+            ch = self.builder.load(ch_ptr)
+            self.builder.store(ch, ch_alloc)
+            for s in node.corpo or []:
+                self._gen_stmt(s)
+                if self.builder.block.is_terminated:
+                    break
+            if not self.builder.block.is_terminated:
+                self.builder.branch(step_block)
+
+            self.builder.position_at_end(step_block)
+            idx2 = self.builder.load(idx_alloc)
+            idx_next = self.builder.add(idx2, ir.Constant(ir.IntType(32), 1))
+            self.builder.store(idx_next, idx_alloc)
+            if not self.builder.block.is_terminated:
+                self.builder.branch(start_block)
+
+            self.builder.position_at_end(end_block)
+            return
+
+        # Arrays tipados (elem*)
+        arr_ptr = str_ptr  # já gerado; renome lógico
+        if isinstance(arr_ptr.type, ir.PointerType) and not isinstance(arr_ptr.type.pointee, ir.LiteralStructType):
+            # length pelo header
+            i8ptr = self.builder.bitcast(arr_ptr, ir.IntType(8).as_pointer())
+            base_i8 = self.builder.gep(i8ptr, [ir.Constant(ir.IntType(32), -8)])
+            len_ptr = self.builder.bitcast(base_i8, ir.IntType(64).as_pointer())
+            n64 = self.builder.load(len_ptr)
+            n = self.builder.trunc(n64, ir.IntType(32))
+
+            idx_alloc = self.builder.alloca(ir.IntType(32), name="_it_idx")
+            self.builder.store(ir.Constant(ir.IntType(32), 0), idx_alloc)
+            elem_ty = arr_ptr.type.pointee
+            elem_alloc = self.builder.alloca(elem_ty, name=node.iter_var)
+            self.symbols[node.iter_var] = elem_alloc
+
+            start_block = self.func.append_basic_block("foreach_arr_start")
+            body_block = self.func.append_basic_block("foreach_arr_body")
+            step_block = self.func.append_basic_block("foreach_arr_step")
+            end_block = self.func.append_basic_block("foreach_arr_end")
+
+            self.builder.branch(start_block)
+            self.builder.position_at_end(start_block)
+            idx = self.builder.load(idx_alloc)
+            cond = self.builder.icmp_signed("<", idx, n)
+            self.builder.cbranch(cond, body_block, end_block)
+
+            self.builder.position_at_end(body_block)
+            elem_ptr = self.builder.gep(arr_ptr, [idx])
+            elem = self.builder.load(elem_ptr)
+            self.builder.store(elem, elem_alloc)
+            for s in node.corpo or []:
+                self._gen_stmt(s)
+                if self.builder.block.is_terminated:
+                    break
+            if not self.builder.block.is_terminated:
+                self.builder.branch(step_block)
+
+            self.builder.position_at_end(step_block)
+            idx2 = self.builder.load(idx_alloc)
+            idx_next = self.builder.add(idx2, ir.Constant(ir.IntType(32), 1))
+            self.builder.store(idx_next, idx_alloc)
+            if not self.builder.block.is_terminated:
+                self.builder.branch(start_block)
+
+            self.builder.position_at_end(end_block)
+            return
+
+        raise NotImplementedError("foreach só suporta range a..b e arrays int por enquanto")
+
+    # -------------------------
+    # Monomorphization (Instanciação de Generics)
+    # -------------------------
+    def _instantiate_generic_function(self, func_name: str, type_args: Tuple[str, ...]) -> str:
+        """Instancia uma versão concreta de uma função genérica com os tipos dados."""
+        # Verifica se já foi instanciada
+        key = (func_name, type_args)
+        if key in self.instantiated_functions:
+            return self.instantiated_functions[key]
+        
+        if func_name not in self.generic_functions:
+            raise NameError(f"Função genérica '{func_name}' não encontrada")
+        
+        generic_decl = self.generic_functions[func_name]
+        type_params = generic_decl.type_params or []
+        
+        if len(type_args) != len(type_params):
+            raise TypeError(f"Função '{func_name}' espera {len(type_params)} argumentos de tipo, mas recebeu {len(type_args)}")
+        
+        # Cria mapeamento de parâmetros de tipo para tipos concretos
+        type_map = dict(zip(type_params, type_args))
+        
+        # Nome mangled para a versão concreta
+        mangled_name = f"{func_name}_{'_'.join(type_args)}"
+        self.instantiated_functions[key] = mangled_name
+        
+        # Substitui tipos nos parâmetros e corpo
+        concrete_params = []
+        for pname, ptype in generic_decl.parametros or []:
+            concrete_type = type_map.get(ptype, ptype)
+            concrete_params.append((pname, concrete_type))
+        
+        concrete_ret_type = type_map.get(generic_decl.tipo_retorno, generic_decl.tipo_retorno)
+        
+        # Cria uma DeclaracaoFuncao concreta (sem type_params)
+        from copy import deepcopy
+        concrete_decl = DeclaracaoFuncao(
+            mangled_name,
+            concrete_params,
+            generic_decl.corpo,  # Corpo será processado com type_map ativo
+            generic_decl.is_procedure,
+            concrete_ret_type,
+            None  # sem type_params
+        )
+        
+        # Guarda o mapeamento de tipos para uso durante geração do corpo
+        prev_type_map = getattr(self, '_current_type_map', None)
+        self._current_type_map = type_map
+        
+        # Gera a função concreta
+        self._gen_function(concrete_decl)
+        
+        # Restaura mapeamento anterior
+        self._current_type_map = prev_type_map
+        
+        return mangled_name
+    
+    def _instantiate_generic_class(self, class_name: str, type_args: Tuple[str, ...]) -> str:
+        """Instancia uma versão concreta de uma classe genérica com os tipos dados."""
+        # Verifica se já foi instanciada
+        key = (class_name, type_args)
+        if key in self.instantiated_classes:
+            return self.instantiated_classes[key]
+        
+        if class_name not in self.generic_classes:
+            raise NameError(f"Classe genérica '{class_name}' não encontrada")
+        
+        generic_decl = self.generic_classes[class_name]
+        type_params = generic_decl.type_params or []
+        
+        if len(type_args) != len(type_params):
+            raise TypeError(f"Classe '{class_name}' espera {len(type_params)} argumentos de tipo, mas recebeu {len(type_args)}")
+        
+        # Cria mapeamento de parâmetros de tipo para tipos concretos
+        type_map = dict(zip(type_params, type_args))
+        
+        # Nome mangled para a versão concreta
+        mangled_name = f"{class_name}_{'_'.join(type_args)}"
+        self.instantiated_classes[key] = mangled_name
+        
+        # Substitui tipos nos campos
+        concrete_fields = []
+        for fname, ftype in generic_decl.campos:
+            concrete_type = type_map.get(ftype, ftype)
+            concrete_fields.append((fname, concrete_type))
+        
+        # Cria uma DeclaracaoClasse concreta (sem type_params)
+        from copy import deepcopy
+        concrete_decl = DeclaracaoClasse(
+            mangled_name,
+            concrete_fields,
+            generic_decl.metodos,  # Métodos serão processados com type_map
+            None  # sem type_params
+        )
+        
+        # Guarda o mapeamento de tipos
+        prev_type_map = getattr(self, '_current_type_map', None)
+        self._current_type_map = type_map
+        
+        # Registra a classe concreta
+        self._register_class(concrete_decl)
+        
+        # Gera métodos da classe concreta
+        for metodo in generic_decl.metodos or []:
+            # Substitui tipos nos parâmetros do método
+            concrete_method_params = []
+            for pname, ptype in metodo.parametros or []:
+                concrete_type = type_map.get(ptype, ptype)
+                concrete_method_params.append((pname, concrete_type))
+            
+            concrete_method_ret = type_map.get(metodo.tipo_retorno, metodo.tipo_retorno) if metodo.tipo_retorno else None
+            
+            concrete_method = DeclaracaoMetodo(
+                mangled_name,  # classe concreta
+                metodo.nome,
+                concrete_method_params,
+                metodo.corpo,
+                metodo.is_procedure,
+                concrete_method_ret,
+                None  # sem type_params
+            )
+            self._gen_method(mangled_name, concrete_method)
+        
+        # Restaura mapeamento anterior
+        self._current_type_map = prev_type_map
+        
+        return mangled_name
+
     # -------------------------
     # Funções
     # -------------------------
@@ -816,6 +1727,59 @@ class LLVMCodeGenerator:
             self.func = prev_func
             self.symbols = prev_symbols
 
+    def _gen_method(self, class_name: str, decl: DeclaracaoMetodo):
+        prev_builder = self.builder
+        prev_func = self.func
+        prev_symbols = self.symbols
+
+        try:
+            if class_name not in self.classes:
+                raise NameError(f"Classe '{class_name}' não registrada para método")
+            class_ptr_ty = self.classes[class_name][0].as_pointer()
+
+            param_types = [class_ptr_ty]
+            param_names = ['self']
+            for pname, ptype in (decl.parametros or []):
+                param_types.append(self._type_from_name(ptype))
+                param_names.append(pname)
+
+            if decl.is_procedure or decl.tipo_retorno == 'void':
+                ret_type = ir.VoidType()
+            else:
+                ret_type = self._type_from_name(decl.tipo_retorno)
+
+            func_type = ir.FunctionType(ret_type, param_types)
+            mangled = f"{class_name}_{decl.nome}"
+            func = ir.Function(self.module, func_type, name=mangled)
+            block = func.append_basic_block("entry")
+            self.builder = ir.IRBuilder(block)
+            self.func = func
+            self.symbols = {}
+
+            for idx, pname in enumerate(param_names):
+                arg = func.args[idx]
+                arg.name = pname
+                alloca = self.builder.alloca(arg.type, name=pname)
+                self.builder.store(arg, alloca)
+                self.symbols[pname] = alloca
+
+            for stmt in decl.corpo or []:
+                self._gen_stmt(stmt)
+
+            if not self.builder.block.is_terminated:
+                if isinstance(ret_type, ir.VoidType):
+                    self.builder.ret_void()
+                elif isinstance(ret_type, ir.PointerType):
+                    self.builder.ret(ir.Constant(ret_type, None))
+                elif isinstance(ret_type, ir.DoubleType):
+                    self.builder.ret(ir.Constant(ret_type, 0.0))
+                else:
+                    self.builder.ret(ir.Constant(ret_type, 0))
+        finally:
+            self.builder = prev_builder
+            self.func = prev_func
+            self.symbols = prev_symbols
+
     # -------------------------
     # Classes
     # -------------------------
@@ -848,8 +1812,20 @@ class LLVMCodeGenerator:
         struct_type = ir.LiteralStructType(field_types)
         self.classes[decl.nome] = (struct_type, field_map)
 
+    def _register_enum(self, decl: DeclaracaoEnum):
+        # Enums armazenados como i32 com mapa de membros
+        if not hasattr(self, 'enums'):
+            self.enums: Dict[str, Dict[str,int]] = {}
+        self.enums[decl.nome] = {nome: valor for (nome, valor) in decl.membros}
+
     def _type_from_name(self, type_name: str) -> ir.Type:
         """Helper para mapear nome de tipo para LLVM Type"""
+        # Primeiro verifica se é um parâmetro de tipo genérico sendo substituído
+        type_map = getattr(self, '_current_type_map', None)
+        if type_map and type_name in type_map:
+            # Recursivamente resolve o tipo concreto
+            return self._type_from_name(type_map[type_name])
+        
         if type_name in ('decimal', 'float', 'double'):
             return ir.DoubleType()
         elif type_name == 'string':
@@ -858,8 +1834,10 @@ class LLVMCodeGenerator:
             return ir.IntType(1)
         elif type_name == 'int':
             return ir.IntType(32)
-        elif type_name in self.classes:
+        elif type_name in getattr(self, 'classes', {}):
             return self.classes[type_name][0].as_pointer()
+        elif type_name in getattr(self, 'enums', {}):
+            return ir.IntType(32)
         else:
             return ir.IntType(8).as_pointer()
 
@@ -966,25 +1944,32 @@ class LLVMCodeGenerator:
             memcpy = ir.Function(self.module, memcpy_ty, name="memcpy")
         return memcpy
 
+    def _entry_alloca(self, ty: ir.Type, name: str):
+        """Cria alloca no bloco de entrada da função atual para evitar problemas de dominância."""
+        current_block = self.builder.block
+        entry_block = self.func.entry_basic_block
+        self.builder.position_at_start(entry_block)
+        alloca = self.builder.alloca(ty, name=name)
+        self.builder.position_at_end(current_block)
+        return alloca
+
     def _builtin_input(self):
         """
         Implementa input() que lê uma linha do stdin e retorna string.
-        Usa fgets com buffer de 256 bytes.
+        Usa scanf com formato "%255[^\n]" para ler até a quebra de linha.
         """
         malloc = self._get_malloc()
-        fgets = self._get_fgets()
-        stdin = self._get_stdin()
-        
+        scanf = self._get_scanf()
         # Aloca buffer de 256 bytes
         buffer_size = ir.Constant(ir.IntType(64), 256)
         buffer = self.builder.call(malloc, [buffer_size])
-        
-        # Chama fgets(buffer, 256, stdin)
-        stdin_ptr = self.builder.load(stdin)
-        self.builder.call(fgets, [buffer, ir.Constant(ir.IntType(32), 256), stdin_ptr])
-        
-        # Remove o \n do final se existir
-        # Por simplicidade, vamos retornar o buffer direto (pode ter \n no final)
+        # Formato: lê até '\n', limitando a 255 chars
+        fmt = self._gen_string("%255[^\n]")
+        # Chama scanf(fmt, buffer)
+        self.builder.call(scanf, [fmt, buffer])
+        # Consome o '\n' restante, se existir
+        fmt_nl = self._gen_string("%*c")
+        self.builder.call(scanf, [fmt_nl])
         return buffer
 
     def _builtin_input_int(self):
@@ -1000,6 +1985,9 @@ class LLVMCodeGenerator:
         # Chama scanf("%d", &int_ptr)
         fmt = self._gen_string("%d")
         self.builder.call(scanf, [fmt, int_ptr])
+        # Consome o '\n' após o número para não afetar próxima leitura
+        fmt_nl = self._gen_string("%*c")
+        self.builder.call(scanf, [fmt_nl])
         
         # Retorna o valor lido
         return self.builder.load(int_ptr)

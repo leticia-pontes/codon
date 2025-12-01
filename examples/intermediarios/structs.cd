@@ -1,0 +1,12 @@
+// Exemplo de structs
+
+struct Pessoa {
+    nome: string;
+    idade: int;
+}
+
+procedure main() {
+    var Pessoa p;
+    p = new Pessoa("Ana", 30);
+    print(p.nome, " ", p.idade);
+}

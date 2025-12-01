@@ -1,0 +1,14 @@
+// Exemplo de mapas
+
+procedure main() {
+    var map[int,int] m;
+    m = new map[int,int](8);
+    m[1] = 42;
+    m[2] = 7;
+    var int a;
+    a = m[1];
+    print("a=", a);
+    var int b;
+    b = m[3]; // não existente -> 0
+    print("b=", b);
+}

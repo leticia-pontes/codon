@@ -1,0 +1,21 @@
+// Exemplo de funcao generica simples
+
+function identity<T>(x: T): T {
+    return x;
+}
+
+procedure main() {
+    // Uso com int
+    var int a;
+    a = 10;
+    var int b;
+    b = identity<int>(a);
+    print("identity<int>(10) =", b);
+    
+    // Uso com string
+    var string s;
+    s = "hello";
+    var string s2;
+    s2 = identity<string>(s);
+    print("identity<string>('hello') =", s2);
+}

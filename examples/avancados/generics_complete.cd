@@ -1,0 +1,61 @@
+// Exemplo completo de Generics em Codon
+
+// Função genérica: swap
+function swap<T>(a: T, b: T): T {
+    return b;  // simplificado - retorna segundo valor
+}
+
+// Classe genérica: Stack
+class Stack<T> {
+    data: T;
+    size: int;
+
+    procedure push(item: T) {
+        self.data = item;
+        self.size = self.size + 1;
+    }
+
+    function peek(): T {
+        return self.data;
+    }
+}
+
+// Struct genérico: Triple
+struct Triple<T, U, V> {
+    first: T;
+    second: U;
+    third: V;
+}
+
+procedure main() {
+    print("=== Generics em Codon ===");
+
+    // Função genérica
+    var int x;
+    x = swap<int>(10, 20);
+    print("swap<int>(10, 20) =", x);
+
+    var string s;
+    s = swap<string>("hello", "world");
+    print("swap<string>(hello, world) =", s);
+
+    // Classe genérica
+    var Stack<int> stack;
+    stack = new Stack<int>();
+    stack.size = 0;
+    stack.push(42);
+    stack.push(100);
+    var int top;
+    top = stack.peek();
+    print("Stack<int>.peek() =", top, "size =", stack.size);
+
+    // Struct genérico com 3 tipos
+    var Triple<int, string, bool> triple;
+    triple = new Triple<int, string, bool>();
+    triple.first = 1;
+    triple.second = "active";
+    triple.third = true;
+    print("Triple:", triple.first, triple.second, triple.third);
+
+    print("=== Generics: OK ===");
+}

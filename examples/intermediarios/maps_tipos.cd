@@ -1,0 +1,14 @@
+// Maps com chaves bool e double
+var b2i;
+b2i = new map[bool, int](8);
+b2i[true] = 10;
+b2i[false] = 5;
+print(b2i[true]);
+print(b2i[false]);
+
+var d2s;
+d2s = new map[double, string](8);
+d2s[1.5] = "um_e_meio";
+d2s[2.0] = "dois";
+print(d2s[1.5]);
+print(d2s[3.0]); // não encontrado -> default
