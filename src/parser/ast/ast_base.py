@@ -445,7 +445,7 @@ class Parser:
             self.ts.expect("SEMI")
             return expr_unaria
 
-        atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ","MINUS_EQ")
+        atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ", "MINUS_EQ", "STAR_EQ", "SLASH_EQ", "PERC_EQ")
 
         if atrib_op:
             valor = self._expressao()
@@ -548,7 +548,7 @@ class Parser:
 
     def _atribuicao_ou_chamada_sem_semi(self) -> ASTNode:
         alvo = self._exp_primaria_ou_acesso()
-        atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ","MINUS_EQ")
+        atrib_op = self.ts.match("ASSIGN", "ARROW_LEFT", "PLUS_EQ", "MINUS_EQ", "STAR_EQ", "SLASH_EQ", "PERC_EQ")
         if atrib_op:
             valor = self._expressao()
             return InstrucaoAtribuicao(alvo, atrib_op.valor, valor)

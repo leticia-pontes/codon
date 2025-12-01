@@ -1,0 +1,6 @@
+// Teste de Erro 2: Tipo incompativel
+function main(): int {
+    var int x;
+    x = "texto";
+    return 0;
+}

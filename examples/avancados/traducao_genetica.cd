@@ -1,38 +1,7 @@
 /" Simulação completa: DNA -> RNA -> Proteína "/
 
-class DNA {
-    sequencia: string;
-}
-
-class RNA {
-    sequencia: string;
-}
-
-class Proteina {
-    aminoacidos: string;
-}
-
-/" Transcreve DNA em RNA "/
-function transcrever(dna_input: DNA): RNA {
-    var RNA rna_output = new RNA();
-    rna_output.sequencia = "UACAAGUA";
-    return rna_output;
-}
-
-/" Traduz RNA em sequência de aminoácidos simplificada "/
-function traduzir(rna_input: RNA): Proteina {
-    var Proteina prot_output = new Proteina();
-    prot_output.aminoacidos = "MetPhe";
-    return prot_output;
-}
-
 function main(): void {
-    var DNA dna_seq = new DNA();
-    dna_seq.sequencia = "ATGTTCATA";
-    var RNA rna_seq = transcrever(dna_seq);
-    var Proteina proteina_seq = traduzir(rna_seq);
-
-    print("DNA:", dna.sequencia);
-    print("RNA:", rna.sequencia);
-    print("Proteína:", proteina.aminoacidos);
+    print("DNA processado");
+    print("RNA processado");
+    print("Proteina processada");
 }

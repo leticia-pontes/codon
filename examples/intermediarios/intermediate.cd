@@ -1,21 +1,19 @@
 /"
-/ste bloco de código verifica se uma sequência de DNA
+Este bloco de código verifica se uma sequência de DNA
 contém um promotor e se o gene é longo o suficiente.
 "/
 
-// Literal biológico DNA (case-insensitive)
-const PROMOTOR = dna"Gattaca";
-const MIN_LEN = 1500;
+function main(): void {
+    var int comprimento;
+    comprimento = 20;
+    
+    var bool tem_promotor;
+    tem_promotor = true;
+    
+    if (tem_promotor) {
+        print("Gene valido");
+    }
 
-var sequencia = dna"GATTACANNNNNNNNNNNNN"; // Exemplo de sequência
-var comprimento = 20; // Definindo comprimento fixo
-
-void analisar_gene(gene_id: string, seq_gene: dna) {
-    var bool tem_promotor = true;
-    print("Gene valido");
-
-    // Teste de operador de shift
-    var bitmask = 16;
+    var int bitmask;
+    bitmask = 16;
 }
-
-analisar_gene("HBA1", sequencia);

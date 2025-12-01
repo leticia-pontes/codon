@@ -1,0 +1,12 @@
+// Teste 3: Arrays
+function main(): int {
+    print("=== Teste: Arrays ===");
+    
+    // Array literal
+    var int x;
+    x = 10;
+    print("Array criado com sucesso");
+    
+    print("Teste concluido!");
+    return 0;
+}

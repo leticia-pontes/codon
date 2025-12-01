@@ -1,0 +1,56 @@
+// Teste 1: Operadores
+function main(): int {
+    print("=== Teste: Operadores ===");
+    
+    var int a;
+    var int b;
+    a = 10;
+    b = 3;
+    
+    var int soma;
+    soma = a + b;
+    print("Soma: ");
+    print(soma);
+    
+    var int sub;
+    sub = a - b;
+    print("Subtracao: ");
+    print(sub);
+    
+    var int mult;
+    mult = a * b;
+    print("Multiplicacao: ");
+    print(mult);
+    
+    var int div;
+    div = a / b;
+    print("Divisao: ");
+    print(div);
+    
+    var int mod;
+    mod = a % b;
+    print("Modulo: ");
+    print(mod);
+    
+    var int pot;
+    pot = 2 ** 3;
+    print("Potencia (2**3): ");
+    print(pot);
+    
+    var int x;
+    x = 5;
+    x += 3;
+    print("x += 3: ");
+    print(x);
+    
+    x -= 2;
+    print("x -= 2: ");
+    print(x);
+    
+    print("Teste concluido!");
+    return 0;
+}
+
+
+
+
