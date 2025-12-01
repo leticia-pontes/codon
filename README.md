@@ -13,7 +13,7 @@
 * [Visão Geral](#visão-geral)
 
   * [Fluxo do Compilador](#fluxo-do-compilador)
-* [📘 Manuais](#-manuais)
+* [Manuais](#-manuais)
 * [Manual de Utilização](#manual-de-utilização)
 * [Instalação (passo a passo)](#instalação-passo-a-passo)
 
@@ -50,7 +50,7 @@ fonte (.cd)
 
 ---
 
-## 📘 Manuais
+## Manuais
 
 Para documentação completa, consulte:
 
