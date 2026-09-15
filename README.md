@@ -1,87 +1,81 @@
-# Codon – Linguagem e Compilador Educacional (LLVM)
+# Codon – Linguagem de Programação e Compilador para LLVM
 
 [![CI](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml/badge.svg)](https://github.com/leticia-pontes/codon/actions/workflows/ci.yml)
 
-> **Nome provisório:** Codon
->
-> **Objetivo:** Linguagem educativa com foco didático (inclui tipos biológicos), compilando para **LLVM IR** com execução JIT via llvmlite.
+**Codon** é uma linguagem de programação compilada com sintaxe própria e um pipeline completo de compilação para **LLVM IR**, com execução JIT utilizando **llvmlite**.
 
----
+O projeto implementa todas as principais etapas de um compilador: análise léxica, análise sintática, construção da AST, análise semântica, verificação de tipos e geração de código LLVM.
 
-## Sumário
+A linguagem possui suporte a recursos como arrays, strings, structs, classes, herança, enums, maps e generics.
 
-* [Visão Geral](#visão-geral)
+## Visão geral
 
-  * [Fluxo do Compilador](#fluxo-do-compilador)
-* [Manuais](#-manuais)
-* [Manual de Utilização](#manual-de-utilização)
-* [Instalação (passo a passo)](#instalação-passo-a-passo)
+O pipeline de compilação segue o fluxo:
 
-  * [Instalação Automática (Recomendado)](#instalação-automática-recomendado)
-  * [Uso após instalação](#uso-após-instalação)
-  * [Instalação Manual (Alternativa)](#instalação-manual-alternativa)
-* [Componentes do Compilador](#componentes-do-compilador)
-* [Léxico / Tokens](#léxico--tokens)
-* [Sintaxe / Gramática](#sintaxe--gramática)
-* [Exemplos](#exemplos)
-* [Executar Testes](#executar-testes)
-* [Perguntas Frequentes](#perguntas-frequentes)
-* [CI - GitHub Actions](#ci---github-actions)
-* [Estrutura do Projeto](#estrutura-do-projeto)
-* [Entrega](#entrega)
-* [Como Contribuir](#como-contribuir)
-* [Licença](#licença)
-
----
-
-## Visão Geral
-
-O **Codon** oferece uma linguagem simples e expressiva, com pipeline completo de compilação: **Analisador Léxico (lexer)**, **Analisador Sintático (parser/AST)**, **Analisador Semântico** e **Gerador de Código** para **LLVM IR**. A execução é feita via JIT (llvmlite), chamando a função `main`.
-
-### Fluxo do Compilador (resumo)
-
-```
-fonte (.cd)
-  ├─► Lexer (tokens)
-  ├─► Parser (AST)
-  ├─► Analisador Semântico (escopos, tipos)
-  └─► Codegen (LLVM IR) ──► JIT (executa main)
+```text
+Código-fonte (.cd)
+      │
+      ▼
+    Lexer
+      │
+      ▼
+    Parser
+      │
+      ▼
+     AST
+      │
+      ▼
+Análise Semântica
+      │
+      ▼
+  LLVM Codegen
+      │
+      ▼
+   LLVM IR
+      │
+      ▼
+     JIT
+      │
+      ▼
+    main()
 ```
 
----
+O compilador pode tanto executar um programa diretamente via JIT quanto gerar o LLVM IR resultante.
 
-## Manuais
+### Principais componentes
 
-Para documentação completa, consulte:
+| Componente        | Responsabilidade                                   |
+| ----------------- | -------------------------------------------------- |
+| Lexer             | Tokenização do código-fonte                        |
+| Parser            | Análise sintática e construção da AST              |
+| Semantic Analyzer | Escopos, tabela de símbolos e verificação de tipos |
+| LLVM Codegen      | Geração de LLVM IR                                 |
+| JIT               | Compilação e execução em tempo de execução         |
+| Test Suite        | Validação dos componentes e exemplos da linguagem  |
 
-- **[MANUAL_INSTALACAO.md](MANUAL_INSTALACAO.md)** - Guia passo a passo para leigos (Windows, Linux, macOS)
-- **[MANUAL_UTILIZACAO.md](MANUAL_UTILIZACAO.md)** - Sintaxe completa, tipos, funções, exemplos
-- **[QUICK_START.md](QUICK_START.md)** - Guia rápido de início
-- **[RESUMO_TECNICO.md](RESUMO_TECNICO.md)** - Visão geral técnica do projeto
-- **[CHECKLIST_ENTREGA.md](CHECKLIST_ENTREGA.md)** - Checklist de requisitos do curso
-- **[RELATORIO_TESTES.md](RELATORIO_TESTES.md)** - ✨ **NOVO** - Relatório de validação (7 testes, 100% sucesso)
+## Recursos da linguagem
 
----
+Atualmente, o Codon suporta:
 
-## Manual de Utilização
+* Variáveis e constantes
+* Tipos inteiros e decimais
+* Strings e caracteres
+* Arrays
+* Structs
+* Classes e herança
+* Enums
+* Maps
+* Funções
+* Funções nativas
+* Generics
+* `foreach`
+* Slicing
+* Controle de fluxo
+* Escopos e resolução de símbolos
+* Verificação estática de tipos
+* Monomorfização de generics
 
-> **Requisitos:** Python ≥ 3.10 e `pip`
-
-Após a instalação (veja seção abaixo), você pode usar o comando `codon` de **qualquer diretório**:
-
-```bash
-# Compilar e executar (JIT)
-codon run meu_programa.cd
-codon run examples/basicos/hello_world.cd
-
-# Apenas compilar (imprime LLVM IR com mensagens informativas)
-codon build meu_programa.cd
-
-# Compilar sem mensagens (ideal para salvar em arquivo)
-codon build meu_programa.cd --quiet > output.ll
-```
-
-**Programa mínimo:**
+Exemplo:
 
 ```codon
 function main(): int {
@@ -90,185 +84,158 @@ function main(): int {
 }
 ```
 
-> **Nota:** Se não houver função `main()`, o compilador cria automaticamente um wrapper que executa as instruções de topo.
+Se nenhum `main()` for declarado, o compilador cria automaticamente um wrapper para executar as instruções presentes no escopo global.
 
----
+## Documentação
 
-## Instalação (passo a passo)
+A documentação técnica está organizada em:
 
-### Instalação Automática (Recomendado)
+* **[QUICK_START.md](QUICK_START.md)** — primeiros passos.
+* **[MANUAL_UTILIZACAO.md](MANUAL_UTILIZACAO.md)** — sintaxe, tipos, funções e exemplos.
+* **[MANUAL_INSTALACAO.md](MANUAL_INSTALACAO.md)** — instalação em Windows, Linux e macOS.
+* **[RESUMO_TECNICO.md](RESUMO_TECNICO.md)** — arquitetura e implementação.
+* **[docs/gramatica-formal-atualizada.md](docs/gramatica-formal-atualizada.md)** — gramática formal.
+* **[docs/especificacao-linguagem.md](docs/especificacao-linguagem.md)** — especificação da linguagem.
 
-**Windows (PowerShell):**
+## Uso
 
-```powershell
-git clone https://github.com/leticia-pontes/codon.git
-cd codon
-.\install.bat
-```
+### Pré-requisitos
 
-**Linux / macOS (bash):**
+* Python ≥ 3.10
+* `pip`
+* Git
+
+### Instalação
+
+Clone o repositório:
 
 ```bash
 git clone https://github.com/leticia-pontes/codon.git
 cd codon
+```
+
+#### Linux / macOS
+
+```bash
 chmod +x install.sh
 ./install.sh
 ```
 
-O script automaticamente:
-1. Cria ambiente virtual (`.venv`)
-2. Instala dependências (`llvmlite`)
-3. Instala o comando `codon` globalmente
+#### Windows
 
-### Uso após instalação
-
-**Ative o ambiente virtual** (necessário apenas uma vez por sessão):
-
-```bash
-# Linux/macOS
-source .venv/bin/activate
-
-# Windows
-.\.venv\Scripts\activate
+```powershell
+.\install.bat
 ```
 
-Agora use `codon` de **qualquer diretório**:
+Os scripts de instalação criam o ambiente virtual, instalam as dependências e configuram o comando `codon`.
+
+### Executar um programa
 
 ```bash
-codon run ~/meus_projetos/teste.cd
-codon build ./programa.cd > saida.ll
+codon run examples/basicos/hello_world.cd
 ```
 
-### Instalação Manual (Alternativa)
+### Gerar LLVM IR
 
 ```bash
-git clone https://github.com/leticia-pontes/codon.git
-cd codon
-
-# Criar e ativar venv
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# OU
-.\.venv\Scripts\activate   # Windows
-
-# Instalar
-pip install -r requirements.txt
-pip install -e .
+codon build examples/basicos/hello_world.cd
 ```
 
----
+Para gerar somente o IR, sem mensagens adicionais:
 
-## Componentes do Compilador
+```bash
+codon build examples/basicos/hello_world.cd --quiet > output.ll
+```
 
-- Léxico: `src/lexer/analisador_lexico_completo.py` (tokens, `TokenStream`).
-- Sintático/AST: `src/parser/ast/ast_base.py`, `src/parser/parser.py` (constrói a AST).
-- Semântico: `src/semantic/analyzer.py` (escopos, tabela de símbolos, verificação de tipos).
-- Codegen: `src/codegen/llvm_codegen.py` (gera LLVM IR com llvmlite; generics por monomorfização; arrays, strings, classes, enums, maps, etc.).
-- Execução/JIT: `src/compilador.py` (liga tudo, verifica e executa `main`).
+Depois da instalação, arquivos `.cd` podem ser compilados a partir de qualquer diretório.
 
----
+## Arquitetura
 
-## Léxico / Tokens
-
-O lexer converte texto em tokens (identificadores, palavras-chave, literais, operadores). Espaços e comentários são ignorados; strings suportam escapes (`\n`, `\t`, `\\`, `\"`).
-
-Números suportam inteiros e decimais.
-
-Exemplo de token:
+A implementação está organizada em componentes independentes:
 
 ```text
-Token(kind, lexeme, literal, line, col)
+src/
+├── lexer/
+│   ├── afds/
+│   ├── analisador_lexico_completo.py
+│   └── tokens.py
+│
+├── parser/
+│   ├── ast/
+│   │   ├── ast_base.py
+│   │   ├── declaracoes.py
+│   │   └── expressoes.py
+│   └── parser.py
+│
+├── semantic/
+│   ├── analyzer.py
+│   ├── tabela_simbolos.py
+│   └── verificador_tipos.py
+│
+├── codegen/
+│   ├── llvm_codegen.py
+│   └── otimizador.py
+│
+└── compilador.py
 ```
 
-A lista termina sempre com `EOF`.
-
----
-
-## Sintaxe / Gramática
-
-A gramática completa e atualizada está em `docs/gramatica-formal-atualizada.md` e a especificação da linguagem em `docs/especificacao-linguagem.md`.
-
----
-
-
+O `llvm_codegen.py` é responsável pela tradução da AST semanticamente validada para LLVM IR. O backend utiliza `llvmlite` e inclui suporte à monomorfização de generics, além da geração de estruturas como arrays, strings, classes, enums e maps.
 
 ## Exemplos
 
-Veja a pasta `examples/`:
-- `basicos/hello_world.cd` – sintaxe mínima.
-- `intermediarios/` – arrays, structs, classes, maps, foreach, slicing.
-- `avancados/` – generics (funções, classes, structs), enums, exemplos completos.
----
+A pasta [`examples/`](examples/) contém programas que demonstram diferentes recursos da linguagem:
 
-## Executar Testes
-
-**Ative o venv primeiro** (se ainda não estiver ativo):
-
-```bash
-source .venv/bin/activate  # Linux/macOS
-.\.venv\Scripts\activate   # Windows
+```text
+examples/
+├── basicos/
+├── intermediarios/
+└── avancados/
 ```
 
-**Rodar testes unitários:**
+Os exemplos básicos cobrem a sintaxe fundamental. Os exemplos intermediários exploram estruturas como arrays, structs, classes, maps, `foreach` e slicing.
+
+Os exemplos avançados incluem generics, enums e programas que combinam múltiplos recursos da linguagem.
+
+## Testes
+
+O projeto possui testes automatizados para os principais componentes do compilador.
+
+### Testes unitários
 
 ```bash
 python -m unittest discover -s test -p "*.py" -v
 ```
 
-**Rodar testes completos + compilação de exemplos:**
+### Suite completa
+
+#### Linux / macOS
 
 ```bash
-# Linux/macOS
 ./scripts/run_all_tests.sh
+```
 
-# Windows (PowerShell)
+#### Windows
+
+```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\scripts\run_all_tests.ps1
 ```
 
-**Teste rápido:**
+A suite também valida a compilação e execução dos exemplos da linguagem.
 
-```bash
-# De qualquer diretório, após ativar venv:
-codon run examples/basicos/hello_world.cd
-```
+## CI
 
----
+O projeto utiliza **GitHub Actions** para executar automaticamente os testes em `push` e `pull_request` direcionados à branch `main`.
 
-## Perguntas Frequentes
+## Estrutura do projeto
 
-**P: Preciso ativar o venv toda vez?**  
-R: Sim, mas apenas uma vez por sessão do terminal. Depois de ativar, o comando `codon` funciona de qualquer diretório.
-
-**P: Posso criar um executável .exe?**  
-R: Sim! Use ferramentas como PyInstaller ou cx_Freeze para empacotar o compilador em um binário standalone. Isso eliminaria a necessidade do venv.
-
-**P: O comando não funciona de outro diretório**  
-R: Verifique se:
-1. O venv está ativado (`source .venv/bin/activate` ou `.\.venv\Scripts\activate`)
-2. A instalação foi concluída (`pip install -e .`)
-3. Use caminhos absolutos ou relativos corretos para os arquivos `.cd`
-
-**P: Como desinstalar?**  
-R: `pip uninstall codon-compiler` (dentro do venv) ou delete a pasta `codon/` inteira.
-
----
-
-## CI - GitHub Actions
-
-O workflow roda testes automaticamente em push/pull_request na branch `main`.
-
----
-
-## Estrutura do Projeto
-
-```
+```text
 codon/
 ├── docs/
 ├── examples/
 │   ├── avancados/
 │   ├── basicos/
-│   ├── intermediarios/
+│   └── intermediarios/
 ├── scripts/
 ├── src/
 │   ├── codegen/
@@ -279,75 +246,21 @@ codon/
 │   └── compilador.py
 ├── test/
 │   ├── lexer_test/
-│   └── parser_test/
+│   ├── parser_test/
+│   ├── semantic_test/
+│   └── codegen_test/
 ├── tools/
 └── README.md
 ```
 
----
+## Estado atual
 
-## Entrega
+O compilador atualmente conta com:
 
-**Link do repositório do projeto:**
-
-https://github.com/leticia-pontes/codon
-
-### ✅ Checklist de Requisitos
-
-Conforme especificação da disciplina, o projeto entrega:
-
-- ✅ **Manual de utilização** → [MANUAL_UTILIZACAO.md](MANUAL_UTILIZACAO.md)
-  - Sintaxe completa da linguagem
-  - Tipos de dados, operadores, estruturas de controle
-  - Funções, arrays, strings, structs, classes, enums
-  - Generics e maps
-  - Funções nativas
-  - Exemplos completos
-
-- ✅ **Manual de instalação para leigo** → [MANUAL_INSTALACAO.md](MANUAL_INSTALACAO.md)
-  - Passo a passo detalhado para Windows, Linux e macOS
-  - Instalação de pré-requisitos (Python)
-  - Script automático de instalação
-  - Verificação e primeiro programa
-  - Solução de problemas comuns
-
-- ✅ **Analisador Léxico (Lexer)**
-  - Implementação: `src/lexer/analisador_lexico_completo.py`
-  - Tokens: `src/lexer/tokens.py`
-  - AFDs: `src/lexer/afds/`
-  - Testes: `test/lexer_test/`
-
-- ✅ **Analisador Sintático (Parser - AST)**
-  - Parser principal: `src/parser/ast/ast_base.py`
-  - Nós da AST: `src/parser/ast/declaracoes.py`, `src/parser/ast/expressoes.py`
-  - Gramática formal: `docs/gramatica-formal-atualizada.md`
-  - Testes: `test/parser_test/`
-
-- ✅ **Analisador Semântico**
-  - Implementação: `src/semantic/analyzer.py`
-  - Tabela de símbolos: `src/semantic/tabela_simbolos.py`
-  - Verificação de tipos: `src/semantic/verificador_tipos.py`
-  - Testes: `test/semantic_test/`
-
-- ✅ **Gerador de Código (LLVM IR)**
-  - Codegen principal: `src/codegen/llvm_codegen.py`
-  - Otimizador: `src/codegen/otimizador.py`
-  - Suporte a generics (monomorphization)
-  - Testes: `test/codegen_test/`
-
-### 📊 Estatísticas do Projeto
-
-- **14 testes unitários** (lexer, parser, semântico, codegen)
-- **47 exemplos funcionais** compilados e validados
-- **Cobertura completa** de features: arrays, strings, classes, herança, generics, enums, maps
-- **CI/CD** via GitHub Actions
-
----
-
-## Como Contribuir
-
-1. Fork → branch → PR.
-2. Inclua testes.
-3. Atualize `docs/` quando necessário.
-
-> Contribuições restritas ao grupo no momento.
+* 14 testes unitários;
+* 47 exemplos funcionais;
+* suporte a arrays, strings, structs, classes, herança, generics, enums e maps;
+* geração de LLVM IR;
+* execução JIT;
+* análise semântica e verificação de tipos;
+* CI via GitHub Actions.
